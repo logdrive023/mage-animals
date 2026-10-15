@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b0d19">
+<title>Mage Animals — Type to Cast</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/main.css?v=20261015h">
+<link rel="stylesheet" href="css/components.css?v=20261015h">
+<link rel="stylesheet" href="css/game.css?v=20261015h">
+</head>
+<body>
+<!-- MOBILE: barra superior com atalhos para as gavetas inferiores (no desktop fica oculta) -->
+<header class="mbar" id="mbar">
+  <button class="mbar-btn" onclick="openSheet('left')" aria-label="Perfil"><span>👤</span><b data-i18n="mobile.profile"></b></button>
+  <div class="mbar-logo">MAGE <i>ANIMALS</i></div>
+  <div class="mbar-r"><button class="mbar-btn" onclick="openModal('collection')" aria-label="Coleção"><span>👕</span><b data-i18n="mobile.collection"></b><i class="mbadge" id="mbarChest"></i></button><button class="mbar-btn ic" onclick="openSheet('right')" aria-label="Magos"><span>🐾</span></button></div>
+</header>
+<div class="sheetbg" id="sheetbg" onclick="closeSheets()"></div>
+<div class="app" id="app">
+  <!-- ESQUERDA: perfil, atalhos, recorde e ajuda (biomas/torres são escolhidos no card central do menu) -->
+  <aside class="left side" id="leftPanel">
+    <button class="collapse" onclick="togglePanel('left')" data-tip-key="focus.hide" aria-label="«">«</button>
+    <div class="logo">
+      <div class="star">✦</div>
+      <h1><div class="l1">MAGE</div><div class="l2">ANIMALS</div></h1>
+    </div>
+    <div class="sub">TYPE TO CAST</div>
+    <div class="profile" id="profile"></div>
+    <div class="nextrw" id="nextReward"></div>
+    <nav class="nav" id="nav"></nav>
+    <div class="recordcard">
+      <div class="rchead"><span class="trophy">🏆</span><b data-i18n="side.yourRecord"></b></div>
+      <div class="best">
+        <div><b id="bestScore">0</b><span data-i18n="hud.points"></span></div>
+        <div><b id="bestWave">0</b><span data-i18n="side.maxWave"></span></div>
+        <div><b id="bestWpm">0</b><span data-i18n="side.maxWpm"></span></div>
+      </div>
+    </div>
+    <button class="helpbtn" onclick="openModal('help')"><span>?</span><b data-i18n="help.button"></b></button>
+  </aside>
+
+  <!-- CENTRO -->
+  <main class="gamepanel">
+    <div class="stage">
+      <canvas id="game" width="600" height="680"></canvas>
+      <!-- touch: camada de desenho de letras (o estilo de controle é escolhido antes da partida e no menu de pausa) -->
+      <canvas class="gest" id="gest"></canvas>
+      <div class="gesthint" id="gestHint"></div>
+      <!-- 📱 HUD em HTML (texto nítido na densidade nativa da tela; o canvas do celular roda em resolução reduzida) -->
+      <div class="mhud" id="mhud" aria-hidden="true">
+        <div class="mh-box mh-l"><small id="mhPtsL"></small><b id="mhScore">0</b><em id="mhCombo"></em></div>
+        <div class="mh-box mh-r"><span class="mh-wave"><small id="mhWaveL"></small><b id="mhWave">1</b></span><span class="mh-lives" id="mhLives"></span><em id="mhInfo"></em></div>
+      </div>
+      <div class="overlay" id="overlay"></div>
+    </div>
+    <div class="drawpad" id="drawpad"><span id="drawpadTx"></span></div>
+    <div class="typebar">
+      <div><div class="ring">
+        <svg width="66" height="66" viewBox="0 0 66 66"><circle cx="33" cy="33" r="28" stroke="#1a2450" stroke-width="5" fill="none"/><circle id="wpmArc" cx="33" cy="33" r="28" stroke="#5ad0ff" stroke-width="5" fill="none" stroke-linecap="round" stroke-dasharray="176" stroke-dashoffset="176"/></svg>
+        <div class="v"><span id="wpm">0</span><small data-i18n="hud.wpm"></small></div>
+      </div><div class="mmode" id="musicMode">♪</div></div>
+      <div>
+        <div class="inputbox" id="inputbox"><span class="typed" id="typed"></span><span class="cur"></span><span class="rest" id="rest"></span></div>
+        <div class="mana" id="mana"><i id="manaFill"></i></div>
+        <div class="kb" id="kb"></div>
+        <div class="kacc" id="kacc"></div>
+        <div class="kacts" id="kacts"><button data-act="pause" aria-label="Pausa">⏸️</button><button data-act="cancel">⌫</button><button data-act="meteor">☄️ <span data-i18n="input.meteor"></span></button></div>
+      </div>
+      <div class="prec"><span data-i18n="hud.precision"></span><b id="prec">100%</b><button class="mbtn accb" id="accBtn" onclick="toggleStrictAccents();this.blur()">Ã</button><button class="mbtn" id="musicBtn" onclick="toggleMusic();this.blur()" title="F2"></button><input type="range" class="vol" id="musicVol" min="0" max="100" oninput="setMusicVol(this.value/100)" onchange="this.blur()" aria-label="Volume"></div>
+    </div>
+  </main>
+
+  <!-- DIREITA: galeria de colecionáveis -->
+  <aside class="right side" id="rightPanel">
+    <button class="collapse" onclick="togglePanel('right')" data-tip-key="focus.hide" aria-label="»">»</button>
+    <div class="sec" data-i18n="sections.characters"></div>
+    <div class="chars" id="chars"></div>
+    <div class="sec" data-i18n="sections.spells"></div>
+    <div class="spells" id="spells"></div>
+    <div class="sec" data-i18n="side.bestiary"></div>
+    <div class="enemies" id="enemyList"></div>
+  </aside>
+</div>
+
+<!-- abas para reabrir os painéis no Modo Foco -->
+<button class="reopen left" id="reopenLeft" onclick="togglePanel('left')" data-tip-key="focus.show">»</button>
+<button class="reopen right" id="reopenRight" onclick="togglePanel('right')" data-tip-key="focus.show">«</button>
+
+<div class="modal hide" id="modal"><div class="mbox" id="mbox"></div></div>
+<div class="gtip" id="gtip" role="tooltip"></div>
+
+<!-- Scripts clássicos (não-módulo): funcionam abrindo o arquivo direto no navegador (file://). A ordem importa. -->
+<!-- camada de efeitos de recompensa (partículas DOM sobre os modais) -->
+<div class="fxlayer" id="fxLayer" aria-hidden="true"></div>
+<script src="js/config/data.js?v=20261015h"></script>
+<script src="js/systems/storage.js?v=20261015h"></script>
+<script src="js/core/utils.js?v=20261015h"></script>
+<script src="js/core/device.js?v=20261015h"></script>
+<script src="js/config/i18n.js?v=20261015h"></script>
+<script src="js/core/pool.js?v=20261015h"></script>
+<script src="js/core/player.js?v=20261015h"></script>
+<script src="js/systems/profile.js?v=20261015h"></script>
+<script src="js/systems/inventory.js?v=20261015h"></script>
+<script src="js/systems/chests.js?v=20261015h"></script>
+<script src="js/audio/audio.js?v=20261015h"></script>
+<script src="js/core/render.js?v=20261015h"></script>
+<script src="js/core/scenery.js?v=20261015h"></script>
+<script src="js/render/vignettes.js?v=20261015h"></script>
+<script src="js/render/runes.js?v=20261015h"></script>
+<script src="js/core/game.js?v=20261015h"></script>
+<script src="js/core/duel.js?v=20261015h"></script>
+<script src="js/ui/ui.js?v=20261015h"></script>
+<script src="js/input/gesture.js?v=20261015h"></script>
+<script src="js/systems/multiplayer.js?v=20261015h"></script>
+<script src="js/systems/pvp.js?v=20261015h"></script>
+<script src="js/systems/friends.js?v=20261015h"></script>
+<script src="js/main.js?v=20261015h"></script>
+</body>
+</html>
