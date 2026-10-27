@@ -227,6 +227,7 @@ const Rhythm={
   this.stop();this.track=tr;this.last=tr;this.stats={perfect:0,great:0,ok:0,miss:0};this.lastJ='';this.ended=false;this.beat=-1;this.ni=0;this.t=0;this.paused=false;
   this.mood=this.moodT=1;this.moodHold=0;this.lastVol=-1;this.hasLyrics=false;sfxApply(); // 🔊 efeitos baixinhos enquanto a faixa toca
   this.diff=songDiff(); // 🎚️ dificuldade escolhida no seletor (vale para a partida inteira)
+  this.needBegin=true; // a partida abre no 1º "tocando" do vídeo (não dá para olhar G.song: depois de perder, a partida anterior ainda está na memória)
   if(tr.src==='drum'){this.dur=tr.dur;this.notes=beatNotes(tr.bpm,tr.offset||0,tr.every||3,tr.dur);this.begin();
    const ac=getAC();if(ac.state==='suspended')ac.resume();this.t0=ac.currentTime+.12;drumStart(this.t0);return}
   // YouTube
@@ -253,7 +254,7 @@ const Rhythm={
      songAutoTitle(tr,ev.target);
      ev.target.setVolume(Math.round(100*(typeof MUS!=='undefined'?MUS.vol:.7)));ev.target.playVideo()},
     onStateChange:ev=>{if(this.track!==tr)return;const S=YT.PlayerState;
-     if(ev.data===S.PLAYING&&!this.playing){this.playing=true;this.rt=performance.now();this.t=ev.target.getCurrentTime()||0;if(!G||!G.song)this.begin()}
+     if(ev.data===S.PLAYING&&this.needBegin){this.needBegin=false;this.playing=true;this.rt=performance.now();this.t=ev.target.getCurrentTime()||0;this.begin()} // ↻ jogar de novo / próxima da playlist também abrem a partida
      else if(ev.data===S.ENDED)this.ended=true},
     onError:ev=>{if(this.track===tr)this.fail(ev.data===150||ev.data===101?'song.err.embed':'song.err.video')}
    }});
