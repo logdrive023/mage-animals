@@ -13,7 +13,7 @@
 // para só o seu jogo poder usar. Sem a variável, qualquer site pode chamar.
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
-const CACHE_SECONDS = 86400; // a mesma legenda é servida do cache por 1 dia (menos pedidos ao YouTube)
+const CACHE_SECONDS = 7 * 86400; // a mesma legenda é servida do cache por 7 dias (o YouTube limita quem pede demais: 429 / "login necessário")
 
 export default {
   async fetch(request, env, ctx) {
@@ -35,7 +35,7 @@ export default {
     if (!/^[\w-]{11}$/.test(vid)) return json({ ok: false, error: 'bad_id' }, 400, cors);
 
     // cache da Cloudflare (por vídeo + idioma)
-    const cacheKey = new Request(`https://captions.cache/v2/${vid}/${lang}`); // v2: escolha pelo idioma da voz (ignora o cache antigo)
+    const cacheKey = new Request(`https://captions.cache/v4/${vid}/${lang}`); // v3: idioma da voz + frases da legenda automática remontadas pelas pausas
     const cache = caches.default;
     const hit = await cache.match(cacheKey);
     if (hit) return new Response(hit.body, { status: 200, headers: { ...cors, 'Content-Type': 'application/json; charset=utf-8', 'X-Cache': 'HIT' } });
@@ -87,29 +87,50 @@ async function* captionSources(vid, dbg) {
   } catch (e) { dbg.push('PAGE:err'); }
 }
 /** texto de legenda → [{t,end,text}]: json3 · srv3 (<p t= d=>) · XML antigo (<text start= dur=>) */
-function parseTrack(txt) {
+// legenda AUTOMÁTICA (asr): o YouTube quebra o texto a cada ~4 palavras, no meio da frase, e as linhas "rolam"
+// (se sobrepõem). Mas cada palavra vem com o próprio tempo (tOffsetMs) → as frases são remontadas pelas PAUSAS do canto:
+// nova frase quando a próxima palavra demora > PAUSE s, ou a frase passa de MAX_WORDS palavras / MAX_SEC segundos.
+const PAUSE = 0.65, MAX_WORDS = 10, MAX_SEC = 6;
+function phrasesFromWords(words) {
+  const out = [];let cur = null;
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i], prev = words[i - 1];
+    const brk = !cur || (prev && w.t - prev.t > PAUSE) || cur.n >= MAX_WORDS || w.t - cur.t > MAX_SEC || /^\[.*\]$/.test(w.w);
+    if (brk) { if (cur) out.push(cur); cur = { t: w.t, end: w.t + 0.4, text: w.w, n: 1 }; }
+    else { cur.text += ' ' + w.w; cur.n++; cur.end = w.t + 0.4; }
+  }
+  if (cur) out.push(cur);
+  for (let i = 0; i < out.length; i++) { const nx = out[i + 1]; out[i].end = +Math.min(nx ? nx.t : out[i].end + 1.2, out[i].end + 1.2).toFixed(3); out[i].t = +out[i].t.toFixed(3); delete out[i].n; }
+  return out;
+}
+function parseTrack(txt, asr) {
   const lines = [];
   if (/^\s*\{/.test(txt)) {
     try {
-      const j = JSON.parse(txt);
+      const j = JSON.parse(txt), words = [];
       for (const ev of j.events || []) {
         if (!ev.segs) continue;
+        const t0 = (ev.tStartMs || 0) / 1000;
+        if (asr) { // palavra a palavra, com o tempo de cada uma
+          for (const s of ev.segs) { const w = String(s.utf8 || '').replace(/\s+/g, ' ').trim(); if (w) words.push({ t: t0 + (s.tOffsetMs || 0) / 1000, w }); }
+          continue;
+        }
         const text = ev.segs.map(s => s.utf8 || '').join('').replace(/\s+/g, ' ').trim();
         if (!text) continue;
-        const t = (ev.tStartMs || 0) / 1000;
-        lines.push({ t: +t.toFixed(3), end: +(t + (ev.dDurationMs || 2000) / 1000).toFixed(3), text: text.slice(0, 160) });
+        lines.push({ t: +t0.toFixed(3), end: +(t0 + (ev.dDurationMs || 2000) / 1000).toFixed(3), text });
       }
+      if (asr && words.length) { words.sort((a, b) => a.t - b.t); const ph = phrasesFromWords(words); ph.words = words.map(w => ({ t: +w.t.toFixed(3), w: w.w })); return ph; } // palavras com tempo vão junto: o jogo remonta as frases do jeito dele
     } catch (e) {}
     return lines;
   }
   for (const m of txt.matchAll(/<p\s+t="(\d+)"(?:\s+d="(\d+)")?[^>]*>([\s\S]*?)<\/p>/g)) {
     const text = decode(m[3]).replace(/\s+/g, ' ').trim(), t = +m[1] / 1000;
-    if (text) lines.push({ t: +t.toFixed(3), end: +(t + (+m[2] || 2000) / 1000).toFixed(3), text: text.slice(0, 160) });
+    if (text) lines.push({ t: +t.toFixed(3), end: +(t + (+m[2] || 2000) / 1000).toFixed(3), text });
   }
   if (lines.length) return lines;
   for (const m of txt.matchAll(/<text start="([\d.]+)"(?: dur="([\d.]+)")?[^>]*>([\s\S]*?)<\/text>/g)) {
     const text = decode(m[3]).replace(/\s+/g, ' ').trim();
-    if (text) lines.push({ t: +m[1], end: +m[1] + (+m[2] || 2), text: text.slice(0, 160) });
+    if (text) lines.push({ t: +m[1], end: +m[1] + (+m[2] || 2), text });
   }
   return lines;
 }
@@ -138,8 +159,8 @@ async function getCaptions(vid, lang) {
         const r = await fetch(base + fmt, { headers: { 'User-Agent': s.ua } });
         const txt = await r.text();
         dbg.push(`${s.src}/${tr.languageCode}${tr.kind === 'asr' ? '(auto)' : ''}${fmt || '&xml'}:${r.status}:${txt.length}b`);
-        const lines = txt ? parseTrack(txt) : [];
-        if (lines.length) return { ok: true, lang: tr.languageCode, kind: tr.kind === 'asr' ? 'auto' : 'manual', src: s.src, lines };
+        const lines = txt ? parseTrack(txt, tr.kind === 'asr') : []; // automática: frases remontadas pelas pausas do canto
+        if (lines.length) return { ok: true, lang: tr.languageCode, kind: tr.kind === 'asr' ? 'auto' : 'manual', src: s.src, lines, words: lines.words || null };
       } catch (e) { dbg.push(`${s.src}${fmt}:err`); }
     }
   }

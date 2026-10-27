@@ -482,9 +482,10 @@ function labelTex(e,isT,hot,s){
 }
 function drawLabels(c){
  c.font=LBL.font;const s=LBL.s,tex=DeviceManager.isMobile;
+ const curLyr=G.song&&Rhythm.hasLyrics?Rhythm.currentLyric():null;let curX=null,curY=0,curT=false; // 🎤 frase da vez (desenhada por último)
  for(let i=0;i<G.enemies.length;i++){
   const e=G.enemies[i],ex=lerpX(e),ey=lerpY(e),isT=G.target===e,hot=e.boost>0||e.crit||e.final;e.hid=arcHidden(e)&&!e.final; // selo vermelho na zona crítica
-  if(e.lyric){c.save();c.globalAlpha=Rhythm.currentLyric()===e?1:.42;drawLyricLabel(c,e,ex,ey,isT);c.restore();c.font=LBL.font;continue} // 🎤 a frase inteira; só a da vez acesa (as próximas esperam apagadas)
+  if(e.lyric){if(e===curLyr){curX=ex;curY=ey;curT=isT;continue}c.save();c.globalAlpha=.42;drawLyricLabel(c,e,ex,ey,isT);c.restore();c.font=LBL.font;continue} // 🎤 frases na fila: apagadas; a da vez é desenhada por último (por cima)
   const lbw=G.runes?(e.lw+16)*s:e.lw+16*s,y=Math.max(118,Math.min(H-8*s,ey+e.r+(G.runes?34:20)*s))|0; // selo começa logo ABAIXO do inimigo (a runa tem 30 de altura acima da base)
   const lbx=Math.max(4,Math.min(W-4-lbw,ex-lbw/2)); // nunca sai da tela, mesmo com a fonte maior
   if(G.runes){c.save();c.translate(lbx+8*s,y);if(s!==1)c.scale(s,s);drawRuneBadge(c,e,0,0,isT,hot);c.restore()} // runa ilustrada, ampliada no celular
@@ -504,6 +505,7 @@ function drawLabels(c){
    if(e.phRest){c.font='800 '+Math.round(11*s)+'px Nunito';c.fillStyle='rgba(255,217,138,.8)';c.fillText('→ '+e.phRest,lbx,ty+16*s);c.font=LBL.font} // frase do mini-chefe: o que vem depois
   }else if(e.maxHp>1)for(let j=0;j<e.maxHp;j++){c.fillStyle=j<e.hp?'#ff6aff':'#3a2a50';c.fillRect((ex-(e.maxHp-1)*6+j*12-3)|0,(ey-e.r-11)|0,6,6)}
  }
+ if(curLyr&&curX!=null){drawLyricLabel(c,curLyr,curX,curY,curT);c.font=LBL.font} // 🎤 a frase da vez nunca fica coberta pelas da fila
 }
 function drawBeams(c){
  c.lineCap='round';c.lineJoin='round';

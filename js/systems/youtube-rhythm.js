@@ -46,7 +46,7 @@ function parseLRC(txt){
  const out=[];
  for(const raw of String(txt||'').split(/\r?\n/)){
   const tags=[...raw.matchAll(/\[(\d{1,2}):(\d{1,2}(?:[.,]\d{1,3})?)\]/g)];if(!tags.length)continue;
-  const text=raw.replace(/\[[^\]]*\]/g,'').trim().slice(0,140);if(!text)continue;
+  const text=raw.replace(/\[[^\]]*\]/g,'').trim();if(!text)continue; // sem limite de caracteres: a frase vem inteira
   for(const m of tags)out.push({t:+m[1]*60+parseFloat(m[2].replace(',','.')),text});
  }
  return out.sort((a,b)=>a.t-b.t);
@@ -54,7 +54,9 @@ function parseLRC(txt){
 /** tempo "h:mm:ss,mmm" · "mm:ss.mmm" · "m:ss" → segundos */
 const tsSec=s=>{const p=String(s).trim().replace(',','.').split(':').map(Number);return p.reduce((a,v)=>a*60+v,0)};
 /** limpa uma linha de legenda: tags <i>/<c>/<00:01.000>, marcações [Música]/(aplausos), notas ♪ e espaços extras */
-const cueText=s=>String(s||'').replace(/<[^>]*>/g,'').replace(/\[[^\]]*\]|\([^)]*\)/g,'').replace(/[♪♫🎵🎶]/g,'').replace(/\s+/g,' ').trim().slice(0,140);
+// parênteses com palavras cantadas (vocal de apoio) FICAM — só saem as marcações de som: (Música) (aplausos) (risos) (instrumental)…
+const SOUND_TAG=/\((?:m[uú]sic[ao]?|music|applause|aplausos?|laughter|laughs?|risos?|instrumental|cheering|gritos?|vaias?|silence|sil[eê]ncio|inaudible|inaud[ií]vel)\)/gi;
+const cueText=s=>String(s||'').replace(/<[^>]*>/g,'').replace(/\[[^\]]*\]/g,'').replace(SOUND_TAG,'').replace(/[()]/g,' ').replace(/[♪♫🎵🎶]/g,'').replace(/\s+/g,' ').trim(); // sem limite de caracteres
 /** 🎞️ frases sincronizadas de QUALQUER formato colado ou aberto:
  *   · .srt / .vtt  — blocos "00:00:18,500 --> 00:00:21,000" + texto (usa início E fim)
  *   · .lrc         — "[00:18.50] frase"
@@ -86,7 +88,18 @@ function tidyLines(out){
 //  o jogo pede as legendas do vídeo ao Worker e cada frase vira um Asteroide do Bardo no tempo exato da fala.
 //  Cole a URL do seu Worker em SONG_CAPTIONS_API (vale para todo mundo que abrir o jogo) ou no campo do Avançado (só neste navegador).
 const SONG_CAPTIONS_API='https://mage-legendas.moraesmatheus92.workers.dev';
-const SONG_CAP_V=2; // versão da escolha de legenda no servidor (2 = idioma da voz); faixas com legenda de versão menor buscam de novo
+const SONG_CAP_V=4; // versão da legenda (2 = idioma da voz · 3 = sem cortes · 4 = frases da automática montadas no jogo); versão menor busca de novo
+// 🎤 frases a partir das palavras com tempo (legenda automática): corta numa pausa LONGA, ou numa pausa curta se a frase já
+//  tem palavras suficientes, ou ao passar do máximo de palavras/segundos. Marcações [Music] são descartadas.
+const PHR={long:1.3,short:.55,minW:4,maxW:10,maxS:6.5,tail:.6};
+function phrasesFromTimedWords(words){
+ const W=words.map(x=>({t:+x.t,w:cueText(x.w)})).filter(x=>x.w&&isFinite(x.t)).sort((a,b)=>a.t-b.t),out=[];let cur=null;
+ for(let i=0;i<W.length;i++){const w=W[i],gap=i?w.t-W[i-1].t:99;
+  const brk=!cur||gap>PHR.long||(gap>PHR.short&&cur.n>=PHR.minW)||cur.n>=PHR.maxW||w.t-cur.t>PHR.maxS;
+  if(brk){if(cur)out.push(cur);cur={t:w.t,last:w.t,text:w.w,n:1}}else{cur.text+=' '+w.w;cur.n++;cur.last=w.t}}
+ if(cur)out.push(cur);
+ return out.map((p,i)=>({t:p.t,end:Math.min(out[i+1]?out[i+1].t:p.last+PHR.tail+.6,p.last+PHR.tail+.6),text:p.text}));
+}
 const songCaptionsApi=()=>String(store.get('captionsApi','')||SONG_CAPTIONS_API).trim().replace(/\/+$/,'');
 /** busca as legendas do vídeo no Worker (máx. 8 s); devolve [{t,end,text}] limpas, ou [] se o vídeo não tiver/der erro */
 async function fetchCaptions(vid){
@@ -95,11 +108,12 @@ async function fetchCaptions(vid){
  try{const lang=String(typeof LANG!=='undefined'?LANG:'pt').slice(0,2);
   const r=await fetch(api+'/?v='+encodeURIComponent(vid)+'&lang='+lang,{signal:ctl?ctl.signal:undefined});const j=await r.json();
   if(!j||!j.ok||!Array.isArray(j.lines))return[];
+  if(Array.isArray(j.words)&&j.words.length)return tidyLines(phrasesFromTimedWords(j.words)); // legenda automática: frases montadas aqui pelas pausas do canto
   return tidyLines(j.lines.map(x=>({t:+x.t,end:+x.end||undefined,text:cueText(x.text)})));
  }catch(e){return[]}finally{clearTimeout(timer)}
 }
 /** palavras digitáveis de uma frase: só letras (apóstrofo/pontuação/números saem), minúsculas, até 16 letras */
-const lyricWords=s=>String(s||'').toLowerCase().normalize('NFC').split(/\s+/).map(w=>w.replace(/[^\p{L}]/gu,'').slice(0,16)).filter(Boolean);
+const lyricWords=s=>String(s||'').toLowerCase().normalize('NFC').split(/\s+/).map(w=>w.replace(/[^\p{L}]/gu,'')).filter(Boolean); // palavra inteira, sem corte
 /** frases → notas: fim = início da próxima (máx. 8 s); refrão = frase que já apareceu antes (asteroide dourado) */
 // 🎚️ DIFICULDADE do modo frase (músicas rápidas): grace = segundos extras depois do fim da frase até o asteroide chegar
 //  na torre · key = só palavras-chave · perfect/great = janelas do julgamento (contadas a partir do fim da frase)
@@ -397,6 +411,7 @@ addEventListener('resize',songDockPlace);
 // ---------- seletor de músicas (modal 'songs') ----------
 let songFormErr='',songErr='';
 function tabSongs(){
+ setTimeout(songFillTitles,0); // 🏷️ faixas salvas só com o id ganham o nome do vídeo (em segundo plano; redesenha quando chegar)
  const fileWarn=(songErr?`<p class="songwarn">⚠️ ${esc(songErr)}</p>`:'')+(location.protocol==='file:'&&!songErr?`<p class="songwarn">⚠️ ${t('song.err.file')}</p>`:'');songErr='';
  const card=(tr,del)=>{const name=tr.src==='drum'?t(tr.title):esc(tr.title||tr.vid);
   const meta=tr.src==='drum'?`${tr.bpm} BPM · ${Math.round(tr.dur/60*10)/10} min · ${t('song.offline')}`:`${tr.lines&&tr.lines.length?'🎤 '+t('song.lyricsN',{n:tr.lines.length}):tr.chart&&tr.chart.length?t('song.chartN',{n:tr.chart.length}):tr.auto?'✨ '+t('song.auto')+(tr.synced?' · 🥁 '+tr.bpm+' BPM':''):(tr.bpm||100)+' BPM'} · YouTube`;
@@ -455,7 +470,8 @@ function songPlaylist(list,seed){ // seed = o vídeo do link (v=): a fila sempre
     if(ids&&ids.length){clearInterval(poll);try{p.destroy()}catch(e){}if(seed)ids=[seed].concat(ids.filter(x=>x!==seed));
      const have=Rhythm.custom(),add=[];for(const vid of ids.slice(0,100))if(!have.some(x=>x.vid===vid))add.push({id:'yt-'+vid,src:'yt',vid,title:vid,auto:true,bpm:SONG_AUTO_BPM,chart:[],lines:[],pl:list});
      Rhythm.saveCustom(add.concat(have));const order=ids.map(v=>(Rhythm.custom().find(x=>x.vid===v)||{}).id).filter(Boolean);
-     hideOverlay();Rhythm.queue=order.slice(1);Rhythm.qTotal=order.length;const first=Rhythm.find(order[0]);if(first)Rhythm.start(first);else fail()}
+     hideOverlay();Rhythm.queue=order.slice(1);Rhythm.qTotal=order.length;const first=Rhythm.find(order[0]);if(first)Rhythm.start(first);else fail();
+     songFillTitles()} // 🏷️ nomes de todas as faixas da playlist em segundo plano
     else if(++tries>25){clearInterval(poll);fail()}},300)}}});
  }).catch(fail);
 }
@@ -542,7 +558,7 @@ function sedRec(){
  // 🎤 LRC colado (com [mm:ss]) → já vem sincronizado: vai direto para a revisão (modo frase)
  if(/\[\d{1,2}:\d{1,2}|-->|^\s*\d{1,2}:\d{2}\b/m.test(txt)){const L=parseTimedText(txt);if(L.length){SED.lines=true;SED.words=L.map(x=>x.text);SED.marks=L.map(x=>({t:x.t,w:x.text}));SED.shift=0;SED.phase='review';sedStatus('');sedSync();return}}
  SED.lines=!!(lc&&lc.checked); // modo frase: uma frase por linha, ESPAÇO marca o início de cada frase
- SED.words=SED.lines?txt.split(/\r?\n/).map(s=>s.trim().slice(0,140)).filter(s=>lyricWords(s).length):sedWords(txt);
+ SED.words=SED.lines?txt.split(/\r?\n/).map(s=>s.trim()).filter(s=>lyricWords(s).length):sedWords(txt);
  if(!SED.words.length){sedStatus(t('song.ed.noWords'));return}
  SED.marks=[];SED.shift=0;SED.phase='rec';sedStatus('');
  try{SED.yt.seekTo(0,true);SED.yt.playVideo()}catch(e){}
@@ -802,3 +818,19 @@ function songSideUpdate(force){
  for(let i=from;i<to;i++){const n=R.notes[i];h+=`<p class="ssl${i<ci?' done':i===ci?' cur':''}${n.chorus?' ch':''}">${esc(n.text)}</p>`}
  box.innerHTML=h;
 }document.addEventListener('scroll',e=>{if(e.target&&e.target.id==='rightPanel')songDockPlace()},true); // o vídeo acompanha a rolagem do painel
+// 🏷️ nomes das faixas sem tocar o vídeo: oEmbed público do YouTube (CORS liberado, sem chave). Usado na importação da
+//  playlist e para consertar faixas salvas só com o id. 4 pedidos por vez; quem já tem nome não é buscado de novo.
+async function fetchTitle(vid){
+ try{const r=await fetch('https://www.youtube.com/oembed?format=json&url='+encodeURIComponent('https://www.youtube.com/watch?v='+vid));if(!r.ok)return'';const j=await r.json();return String(j.title||'').slice(0,60)}catch(e){return''}
+}
+let _titleBusy=false;
+async function songFillTitles(){
+ if(_titleBusy)return;const todo=Rhythm.custom().filter(x=>x.src==='yt'&&(!x.title||x.title===x.vid)).map(x=>x.vid);if(!todo.length)return;
+ _titleBusy=true;const got={};let i=0;
+ const worker=async()=>{while(i<todo.length){const v=todo[i++];const ti=await fetchTitle(v);if(ti)got[v]=ti}};
+ await Promise.all([worker(),worker(),worker(),worker()]);_titleBusy=false;
+ if(!Object.keys(got).length)return;
+ Rhythm.saveCustom(Rhythm.custom().map(x=>got[x.vid]&&(!x.title||x.title===x.vid)?Object.assign({},x,{title:got[x.vid]}):x));
+ if(Rhythm.track&&got[Rhythm.track.vid]&&Rhythm.track.title===Rhythm.track.vid)Rhythm.track.title=got[Rhythm.track.vid];
+ if(modalOpen&&modal.kind==='songs')renderModal();
+}
