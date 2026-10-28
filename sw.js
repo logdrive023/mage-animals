@@ -1,13 +1,14 @@
 // Mage Animals — sw.js · Service worker: o jogo abre sem internet depois da 1ª visita e vira app instalável.
 // Estratégia:
 //  · página (index.html): rede primeiro (deploy novo chega na hora); sem rede, a cópia salva;
-//  · arquivos do jogo e fontes: cópia salva na hora + atualização em segundo plano. Como cada arquivo leva ?v=…,
+//  · fontes do Google: cópia salva primeiro (não mudam);
+//  · arquivos do jogo: cópia salva na hora + atualização em segundo plano. Como cada arquivo leva ?v=…,
 //    um deploy novo baixa a versão nova e a antiga do mesmo arquivo é apagada (o cache não cresce);
 //  · YouTube, servidor de legendas, PeerJS e o resto de fora: direto da rede, nunca guardados.
 // Notificação de convite (tocada com o jogo em segundo plano): o toque abre/foca o jogo já entrando na sala.
 const CACHE = 'mage-v1';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './assets/icon-192.png', './assets/icon-512.png'];
-const FONT_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com'];
+const FONT_HOSTS = ['fonts.gstatic.com']; // só os arquivos das fontes (o CSS do Google vem opaco e o Chrome reclamava no console)
 
 self.addEventListener('install', e => {
   self.skipWaiting();
@@ -33,6 +34,11 @@ self.addEventListener('fetch', e => {
   if (req.mode === 'navigate') {
     e.respondWith(fetch(req).then(res => { if (res.ok) putFresh(new Request('./index.html'), res.clone()); return res })
       .catch(() => caches.match('./index.html').then(r => r || caches.match('./'))));
+    return;
+  }
+  // fontes nunca mudam no mesmo endereço: cópia salva primeiro, rede só na 1ª vez (economiza dados no celular)
+  if (!same) {
+    e.respondWith(caches.match(req).then(hit => hit || fetch(req).then(res => { if (res.ok || res.type === 'opaque') putFresh(req, res.clone()); return res })));
     return;
   }
   e.respondWith(caches.match(req).then(hit => {

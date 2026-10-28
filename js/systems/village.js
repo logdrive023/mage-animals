@@ -122,6 +122,7 @@ function tabVillage(){
  if(tab==='build')return`<div class="vil" id="village-modal">${banner}<div class="vgrid">${VILLAGE.buildings.map(card).join('')}</div></div>`;
  const fresh=sl>(d.chSeen|0); // há capítulo que o jogador ainda não leu
  return`<div class="vil" id="village-modal">${intro}${banner}
+  ${villageGoalHTML()}
   <div class="vscene"><canvas id="vMap" aria-label="${esc(d.name)}"></canvas>${villagePins()}
    <i class="vsp" style="left:50%;top:6%"></i><i class="vsp" style="left:9%;top:30%"></i><i class="vsp" style="left:93%;top:22%"></i><i class="vsp" style="left:74%;top:58%"></i><i class="vsp" style="left:30%;top:48%"></i></div>
   <button class="vteaser${fresh?' fresh':''}" onclick="setTab('story')"><span class="vtsic">📜</span><span class="vtstx"><small>${fresh?'✨ '+t('village.st.new'):t('village.st.current')}</small><b>${t('story.chronicle',{n:sl})}</b><em>${esc(stripTags(Story.chapter(sl)))}</em></span><span class="vtsgo">${t('village.st.read')} ›</span></button>

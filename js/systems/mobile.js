@@ -31,10 +31,10 @@ function pwaInstall(){
 }
 function pwaChipSync(){
  let el=$('pwaChip');const show=pwaCan()&&!store.get('pwaHide',0)&&state==='menu'&&!modalOpen&&!openSheetSide;
- if(!show){if(el)el.classList.remove('on');return}
+ if(!show){if(el&&el.classList.contains('on'))el.classList.remove('on');return}
  if(!el){el=document.createElement('div');el.id='pwaChip';el.className='pwachip';document.body.appendChild(el)}
- el.innerHTML=`<button class="pw-go" onclick="pwaInstall()">📲 ${t('mob.install')}</button><button class="pw-x" aria-label="×" onclick="store.set('pwaHide',1);pwaChipSync()">×</button>`;
- el.classList.add('on');
+ if(el.dataset.lang!==LANG){el.dataset.lang=LANG;el.innerHTML=`<button class="pw-go" onclick="pwaInstall()">📲 ${t('mob.install')}</button><button class="pw-x" aria-label="×" onclick="store.set('pwaHide',1);pwaChipSync()">×</button>`} // só remonta ao trocar de idioma
+ if(!el.classList.contains('on'))el.classList.add('on');
 }
 
 // ---------- 🔆 tela acesa durante a partida (Screen Wake Lock: iPhone iOS 16.4+ e Android) ----------

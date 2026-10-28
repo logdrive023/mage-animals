@@ -27,7 +27,8 @@ function fitCanvas(){
  if(typeof labelScale==='function')labelScale(); // fonte dos rótulos acompanha o tamanho exibido
  // HQ: densidade nativa da tela · Lite: no máximo 1 pixel por pixel CSS (×0,75 em telas comuns) → até 4× menos pixels em telas HiDPI
  // 📱 celular: sempre a densidade-teto (1,25) — o modo leve do celular já corta partículas/efeitos; reduzir a resolução aqui borrava tudo
- const dpr=DeviceManager.dpr,lite=typeof PERF!=='undefined'&&!PERF.hq,dens=DeviceManager.isMobile?dpr:lite?Math.min(dpr*.75,1):dpr;
+ // 📱 teto de 1,75× no celular: na densidade cheia (iPhone = 3×) o buffer passava de 1170×1330 px redesenhado 60×/s — travava
+ const dpr=DeviceManager.dpr,lite=typeof PERF!=='undefined'&&!PERF.hq,dens=DeviceManager.isMobile?Math.min(dpr,1.75):lite?Math.min(dpr*.75,1):dpr;
  const k=Math.min(3,Math.max(.5,Math.max(r.height/H,r.width/W)*dens)); // max: no menu do celular o canvas pode estar recortado (object-fit:cover)
  const w=Math.round(W*k),h=Math.round(H*k);
  if(DeviceManager.isMobile&&cv.width&&Math.abs(w-cv.width)/cv.width<.06&&cv.dataset.fit)return; // ±6%: o CSS escala, o buffer fica

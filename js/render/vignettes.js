@@ -9,9 +9,10 @@
 'use strict';
 
 const MENU_SCENES=[
- {id:'tavern',ch:'gato',ic:'🍺',ax:170,ay:128,s:1.45},
- {id:'forge',ch:'coelho',ic:'⚒️',ax:128,ay:118,s:1.5},
- {id:'library',ch:'raposa',ic:'📖',ax:118,ay:132,s:1.45},
+ // pés = ay + 134·s: nas cenas de interior o chão começa em y≈360–370 → os magos pisam nele (antes ficavam ~50 acima, na parede)
+ {id:'tavern',ch:'gato',ic:'🍺',ax:170,ay:166,s:1.45}, // atrás da mesa (tampo em y=330): pés no chão, a mesa cobre só as pernas
+ {id:'forge',ch:'coelho',ic:'⚒️',ax:128,ay:179,s:1.5},
+ {id:'library',ch:'raposa',ic:'📖',ax:118,ay:198,s:1.45},
  {id:'observatory',ch:'coruja',ic:'🔭',ax:196,ay:158,s:1.3},
  {id:'kingdom',ch:'gato',ic:'🏛️',ax:316,ay:128,s:.46,dyn:true}, // 🏛️ o Reino (mapa da Vila) com o mago escolhido em primeiro plano
  {id:'campfire',ch:'all',ic:'🔥',rare:true,cast:[

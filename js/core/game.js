@@ -613,7 +613,9 @@ let chromePlay=null;const appEl=document.getElementById('app'),panelEl=document.
 function syncChrome(){const m=state==='menu'||state==='over',p=state==='play';if(m!==chromeMenu){chromeMenu=m;panelEl.classList.toggle('menu-mode',m);fitMenuMobile()}if(p!==chromePlay){chromePlay=p;appEl.classList.toggle('playing',p);document.body.classList.toggle('playing',p);fitMenuMobile()}}
 function loop(now){
  rafId=requestAnimationFrame(loop);
- if(LOW_FPS&&now-lastT<30)return; // 🔋 pula um quadro sim, outro não (o tempo acumulado entra no próximo)
+ // 🔋 pula um quadro sim, outro não (o tempo acumulado entra no próximo). 📱 No celular, o menu e as telas fora da partida
+ //  também ficam a 30 FPS: a cena do fundo não precisa de 60 e sobra fôlego para rolar e tocar nos botões
+ if((LOW_FPS||(DeviceManager.isMobile&&state!=='play'))&&now-lastT<30)return;
  syncChrome();const w0=performance.now();
  let dt=(now-lastT)/1000;lastT=now;
  if(!(dt>0))dt=0;if(dt>.1)dt=.1; // trava contra saltos (aba voltou, travada do sistema)

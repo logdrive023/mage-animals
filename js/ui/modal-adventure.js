@@ -24,6 +24,9 @@ const ADV_NAV=[
  ['dictionary','nav.dictionary',svgI('<path d="M4 5.5C6 4.5 9 4.5 12 6c3-1.5 6-1.5 8-.5V19c-2-1-5-1-8 .5-3-1.5-6-1.5-8-.5z"/><path d="M12 6v13.5"/>')]
 ];
 let advLastNav=store.get('advNav','');
+// 📱 celular: só os 4 atalhos mais usados numa linha + "Mais" (abre a gaveta com o menu completo) — tela inicial mais leve
+const ADV_NAV_MOB=['missions','collection','duel','online'];
+const advNavList=()=>DeviceManager.isMobile?ADV_NAV_MOB.map(k=>ADV_NAV.find(n=>n[0]===k)).filter(Boolean):ADV_NAV;
 const advLabel=s=>s.charAt(0).toUpperCase()+s.slice(1).toLowerCase(); // "COLEÇÃO" → "Coleção" (rótulos uniformes)
 function advNav(kind){advLastNav=kind;store.set('advNav',kind);openModal(kind)}
 // troca a aventura SEM redesenhar o menu: só move o destaque/check entre os cards (o layout não muda → nada pula)
@@ -45,11 +48,11 @@ function adventureHTML(){
  return`<div class="mcard adv" id="adventure-modal">
   <h2 class="adv-title">${t('menu.chooseBiome')}</h2>
   <div class="adv-cards" role="radiogroup">${BIOMES.map((b,i)=>{const on=i===currentBiome;
-   return`<button class="adv-card bio-${b.id}${on?' on':''}" role="radio" aria-checked="${on}" onclick="advPick(${i})">
+   return`<button class="adv-card bio-${b.id}${on?' on':''}" role="radio" aria-checked="${on}" title="${esc(t('biomes.'+b.id+'.desc'))}" onclick="advPick(${i})">
     <span class="adv-ic">${ADV_ICONS[b.id]||b.ic}</span><b>${t('biomes.'+b.id+'.name')}</b><small>${t('biomes.'+b.id+'.desc')}</small>
     ${on?'<i class="adv-check" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></i>':''}</button>`}).join('')}</div>
   <div class="adv-playrow"><button class="adv-play" onclick="playFromMenu()"><span>▶</span> ${t('ui.play')}</button>${dailyBtnHTML()}</div>
-  <div class="adv-foot"><nav class="adv-nav">${ADV_NAV.map(([k,lab,ic])=>`<button class="${advLastNav===k?'on':''}" onclick="advNav('${k}')">${ic}<span>${advLabel(t(lab))}</span>${badge(k)}</button>`).join('')}</nav>
+  <div class="adv-foot"><nav class="adv-nav">${advNavList().map(([k,lab,ic])=>`<button class="${advLastNav===k?'on':''}" onclick="advNav('${k}')">${ic}<span>${advLabel(t(lab))}</span>${badge(k)}</button>`).join('')}${DeviceManager.isMobile?`<button class="adv-more" onclick="openSheet('left')">${svgI('<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>')}<span>${advLabel(t('mob.more'))}</span></button>`:''}</nav>
   <div class="adv-lang" role="group" aria-label="Idioma">${LANGS.map(l=>`<button class="${LANG===l.id?'on':''}" title="${l.n}" aria-pressed="${LANG===l.id}" onclick="changeLang('${l.id}')">${l.id.slice(0,2).toUpperCase()}</button>`).join('')}</div></div>
  </div>`;
 }

@@ -119,7 +119,8 @@ function paintVillageClassic(c,lv){
 const VMAP={W:720,H:470,
  // base (no chão) de cada prédio e posição da placa (abaixo dele), no espaço lógico 720×470
  pos:{sanct:[360,214],mine:[152,160],lab:[166,322],forge:[586,162],tavern:[262,380],market:[590,300],barn:[476,380]},
- pin:{sanct:[360,318],mine:[150,198],lab:[166,356],forge:[586,196],tavern:[262,412],market:[590,334],barn:[476,412]},
+ // placa do Santuário sobre a praça/fonte (em 318 caía no telhado da Taverna)
+ pin:{sanct:[360,244],mine:[150,198],lab:[166,356],forge:[586,196],tavern:[262,412],market:[590,334],barn:[476,412]},
  cache:null,key:''};
 // paleta pastel (paredes creme, madeira quente, telhados roxos, pedra clara)
 const VK={wall:'#f6ead2',side:'#e2cfae',wood:'#9a643c',woodD:'#6e442a',roof:'#7f62d2',roofD:'#5c43ad',roofL:'#a58cec',stone:'#e7e2da',stoneD:'#bdb4ab',win:'#ffd877',out:'rgba(72,46,96,.34)'};
@@ -436,13 +437,26 @@ const VK_ICONS={
  market:VK_IC('<path d="M12 2.5l1.9 5.6 5.6 1.9-5.6 1.9L12 17.5l-1.9-5.6-5.6-1.9 5.6-1.9z"/><path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/>',1),
  barn:VK_IC('<path d="M7 21h11l-.6-4.6c2.3-1.4 3.3-3.6 2.4-6.8L17.4 5l-1.9 1.4L14 4.8c-3.6.9-6.4 4.1-6.7 8.4l2.6.7 2.6-2.4.6 2.1-5 3.5z"/>',1)
 };
+/** 🎯 faixa "próxima meta" acima do mapa: o que já dá para melhorar, ou a melhoria mais perto (barra de progresso) */
+function villageGoalHTML(){
+ const V=Village,aura=profile.aura||0,bs=VILLAGE.buildings,nm=id=>t('village.b.'+id+'.short');
+ const ready=bs.filter(B=>!V.check(B.id));
+ if(ready.length)return`<button class="vgoal ready" onclick="VillageUI.focus('${ready[0].id}')"><span class="vg-ic">⬆</span><span class="vg-tx"><b>${ready.length>1?t('village.goal.readyN',{n:ready.length}):t('village.goal.ready',{b:nm(ready[0].id)})}</b><small>${t('village.goal.readySub')}</small></span><span class="vg-go">${t('village.goal.go')} ›</span></button>`;
+ const next=bs.filter(B=>V.check(B.id)==='aura').sort((a,b)=>V.cost(a.id)-V.cost(b.id))[0];if(!next)return'';
+ const c=V.cost(next.id),p=Math.min(100,Math.round(aura/c*100)),mineH=V.lv('mine')?Math.ceil(Math.max(0,c-aura-V.pending())/Math.max(1,V.rate())):0;
+ return`<button class="vgoal" onclick="VillageUI.focus('${next.id}')"><span class="vg-ic">🎯</span><span class="vg-tx"><b>${t('village.goal.next',{b:nm(next.id),l:V.lv(next.id)+1})}</b>
+  <span class="vg-bar"><i style="width:${p}%"></i></span><small>${VILLAGE_GEM}${fmtN(aura)} / ${fmtN(c)} · ${t('village.goal.miss',{n:fmtN(c-aura)})}${mineH?' · '+t('village.goal.mine',{h:mineH}):''}</small></span><span class="vg-go">${p}%</span></button>`;
+}
 /** placas HTML sobre o mapa (nome + nível; clique leva ao card do prédio) */
 function villagePins(){
  const V=Village,pin=(id,txt,act,cls)=>{const[l,tp]=vmLabelPos(id);return`<button class="vpin ${cls||''}" style="left:${l}%;top:${tp}%" onclick="${act}">${txt}</button>`};
  let h='';
  for(const B of VILLAGE.buildings){const lv=V.lv(B.id),who=Object.keys(V.data.workers).filter(k=>V.data.workers[k]===B.id).map(k=>(CHARS.find(c=>c.id===k)||{}).emoji||'').join('');
   const name=B.id==='sanct'?esc(V.data.name):t('village.b.'+B.id+'.short');
-  h+=pin(B.id,`${B.id==='sanct'?'<span class="prow">':''}${VK_ICONS[B.id]||''}<span class="pn">${name}</span>${B.id==='sanct'?'</span>':' '}<b>${lv?t('ui.lvl')+' '+lv:'🔨'}</b>${who?` <i>${who}</i>`:''}`,`VillageUI.focus('${B.id}')`,(lv?'':'off')+(B.id==='sanct'?' main':''))}
+  // 🎯 gatilhos: ⬆ já dá para melhorar (recompensa imediata) · "faltam N" quando falta pouco (quase lá) · mina cheia (perda)
+  const why=V.check(B.id),miss=Math.max(0,V.cost(B.id)-(profile.aura||0)),full=B.id==='mine'&&lv&&V.pending()>=V.cap();
+  const trig=full?`<em class="vtrig full">${t('village.trig.full')}</em>`:!why?`<em class="vtrig up" title="${esc(t('village.trig.upTip'))}">⬆</em>`:why==='aura'&&miss<=V.cost(B.id)*.35?`<em class="vtrig near">${t('village.trig.near',{n:fmtN(miss)})}</em>`:'';
+  h+=pin(B.id,`${B.id==='sanct'?'<span class="prow">':''}${VK_ICONS[B.id]||''}<span class="pn">${name}</span>${B.id==='sanct'?'</span>':' '}<b>${lv?t('ui.lvl')+' '+lv:'🔨'}</b>${who?` <i>${who}</i>`:''}${trig}`,`VillageUI.focus('${B.id}')`,(lv?'':'off')+(B.id==='sanct'?' main':'')+(!why?' can':'')+(full?' full':''))}
  h+=pin('market',`${VK_ICONS.market}<span class="pn">${t('village.market')}</span>`,`openModal('collection')`,'shop');
  h+=pin('barn',`${VK_ICONS.barn}<span class="pn">${t('village.barn')}</span>`,`VillageUI.focus('tavern')`,'deco');
  if(V.lv('mine')&&V.pending()>=Math.max(20,V.cap()*.25)){const[l,tp]=vmLabelPos('mine',true);h+=`<button class="vbubble" style="left:calc(${l}% + 9%);top:${tp}%" onclick="VillageUI.collect(event)"><i></i>+${fmtN(V.pending())}</button>`}
