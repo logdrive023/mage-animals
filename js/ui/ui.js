@@ -49,11 +49,12 @@ function renderNav(){
  const vp=Village.pending(),vh=vp>=Math.max(50,Village.cap()*.5);
  const on=typeof Net!=='undefined'&&Net.active(),lobby=typeof Net!=='undefined'&&Net.state==='lobby';
  // 🧭 menu simples: 3 grupos curtos, rótulos em texto normal, aviso = bolinha com número (sem piscar) + descrito no aria-label
- const item=(modalId,ic,key,badge,badgeTxt)=>`<button class="pill${badge?' hot':''}" onclick="openModal('${modalId}')"${badge?` aria-label="${esc(t('side.nav.'+key)+' · '+badgeTxt)}"`:''}><span aria-hidden="true">${ic}</span><b>${t('side.nav.'+key)}</b>${badge?`<i class="badge" aria-hidden="true">${badge}</i>`:''}</button>`;
+ // ✨ cada item: selo do ícone na cor própria (--ic) + nome + linha curta do que tem lá (muda quando há aviso)
+ const item=(modalId,ic,key,col,badge,badgeTxt,sub,act)=>`<button class="pill ic${badge?' hot':''}" style="--ic:${col}" onclick="${act||`openModal('${modalId}')`}"${badge?` aria-label="${esc(t('side.nav.'+key)+' · '+badgeTxt)}"`:''}><span aria-hidden="true">${ic}</span><div class="nt"><b>${t('side.nav.'+key)}</b><em>${sub||t('side.sub.'+key)}</em></div>${badge?`<i class="badge" aria-hidden="true">${badge}</i>`:''}</button>`;
  const grp=(key,items)=>`<div class="navgrp" role="group" aria-label="${esc(t('side.grp.'+key))}"><h3 aria-hidden="true">${t('side.grp.'+key)}</h3>${items}</div>`;
- $('nav').innerHTML=grp('battle',item('duel','⚔️','duelBot')+item('online','🌐','online',lobby?'1v1':on?'●':'',t('side.badge.online'))+item('ranking','🏆','ranking'))
-  +grp('progress',item('missions','📜','missions',q||'',t('side.badge.claim',{n:q}))+item('village','🏛️','kingdom',vh?'💎':'',t('side.badge.mine'))+item('collection','👕','collection',nc?'🎁'+nc:'',t('side.badge.chests',{n:nc}))+item('dictionary','📖','dictionary')+item('towers','🏰','towers'))
-  +grp('social',`<button class="pill" onclick="openProfile(false,'perfil')"><span aria-hidden="true">👤</span><b>${t('side.nav.profile')}</b></button>`+item('friends','👥','friends'));
+ $('nav').innerHTML=grp('battle',item('duel','⚔️','duelBot','#ff7a8a')+item('online','🌐','online','#5ad0ff',lobby?'1v1':on?'●':'',t('side.badge.online'),lobby?t('side.sub.onlineLobby'):on?t('side.sub.onlineWait'):'')+item('ranking','🏆','ranking','#ffd24a'))
+  +grp('progress',item('missions','📜','missions','#f0c27a',q||'',t('side.badge.claim',{n:q}),q?t('side.badge.claim',{n:q}):'')+item('village','🏛️','kingdom','#5ee0c0',vh?'💎':'',t('side.badge.mine'),vh?t('side.badge.mine'):'')+item('collection','👕','collection','#ff8ad8',nc?'🎁'+nc:'',t('side.badge.chests',{n:nc}),nc?t('side.badge.chests',{n:nc}):'')+item('dictionary','📖','dictionary','#8ab4ff')+item('towers','🏰','towers','#ffa05a'))
+  +grp('social',item('','👤','profile','#c9a6ff','','','',"openProfile(false,'perfil')")+item('friends','👥','friends','#7dffbd'));
  const mb=$('mbarChest');if(mb)mb.textContent=nc?nc:'';
 }
 
@@ -416,10 +417,14 @@ function quitToMenu(){showMenu();snd(330,.12,'triangle',.05)}
 function showGameOver(r){
  const row=(l,v)=>`<div class="row"><span>${l}</span><b>+${v}</b></div>`;
  const hook=Meta.hook(r);
+ // 📤 celular: o resultado vira imagem para compartilhar (mobile.js)
+ shareSet({head:r.song?r.song.title||'':t('hud.wave')+' '+r.wave,sub:r.song?t('mob.shareSong',{p:r.song.pct|0}):charName(G&&G.ch?G.ch:CHARS[selected]),
+  stats:[[t('hud.points'),fmtN(r.score)],[t('hud.wave'),r.wave],['WPM',r.wpm],[t('hud.precision'),r.acc+'%']],
+  text:r.song?t('mob.shareTextSong',{s:r.song.title||'',w:r.wpm}):t('mob.shareText',{n:r.wave,w:r.wpm})});
  showOverlay(`<h2>${r.song?t(r.song.clear?'song.clearTitle':'song.overTitle'):t(r.daily?'daily.over':'results.gameOver')}</h2>${r.record?`<p class="record">${t('results.newRecord')}</p>`:''}
  ${failHTML(r)}
  ${hook?`<p class="gohook">🔥 ${esc(hook)}</p>`:''}
- <div class="row2 goquick"><button class="btn" id="goAgain" onclick="playAgain()">↻ ${t(r.daily?'daily.again':'results.again')}</button><button class="btn ghost" onclick="quitToMenu()">🏠 ${t('results.menu')}</button></div>
+ <div class="row2 goquick"><button class="btn" id="goAgain" onclick="playAgain()">↻ ${t(r.daily?'daily.again':'results.again')}</button><button class="btn ghost" onclick="quitToMenu()">🏠 ${t('results.menu')}</button>${shareBtnHTML()}</div>
  ${DeviceManager.isTouch?'':`<div class="kbdhint"><span class="kh-tag">⌨️ ${t('results.shortcuts')}</span><span><kbd>ENTER</kbd> ${t('results.again').toLowerCase()}</span><span><kbd>ESC</kbd> ${t('results.menu').toLowerCase()}</span></div>`}
  ${r.song?songOverHTML(r.song):''}
  ${dailyOverHTML(r.daily)}
@@ -603,7 +608,8 @@ function tipCard(o){
   ${o.desc?`<p class="tc-d">${o.desc}</p>`:''}${stats?`<div class="tc-s">${stats}</div>`:''}${o.foot?`<div class="tc-f">${o.foot}</div>`:''}</div>`;
 }
 const SPEED_TAG=v=>v>=1.3?'fast':v<=.6?'slow':v<1?'steady':'normal';
-const ENEMY_IC={rock:'🌑',crystal:'💎',ghost:'👻',boss:'👑'},ENEMY_AC={rock:'#b0a090',crystal:'#c9a6ff',ghost:'#7dffbd',boss:'#ff8a5a'},ENEMY_WAVE={rock:1,crystal:4,ghost:4,boss:8};
+const ENEMY_IC={rock:'🌑',crystal:'💎',ghost:'👻',boss:'👑'},ENEMY_AC={rock:'#b0a090',crystal:'#c9a6ff',ghost:'#7dffbd',boss:'#ff8a5a'},ENEMY_WAVE={rock:1,crystal:4,ghost:4,boss:ARC.BOSS_EVERY}; // D7: chefe na onda 5 em todos os modos (antes dizia 8)
+if(DeviceManager.isMobile){const gw=SAWTOOTH.findIndex(p=>p.kinds==='ghost');if(gw>=0)ENEMY_WAVE.ghost=gw+1} // 📱 celular (ondas em serra): o fantasma chega na onda 3
 function renderSide(){
  // coleção de personagens (grid 2×2): bloqueados mostram a condição no tooltip
  $('chars').innerHTML=CHARS.map((c,i)=>{const lock=isLocked(c);

@@ -20,7 +20,8 @@ function tabSettings(){
   <button class="langb ${PERF.showFps?'sel':''}" onclick="keepNick();setShowFps(!PERF.showFps);renderModal()"><span>📈</span>${t('settings.showFps')}</button></div></div>
  <h4>🎮 ${t('settings.gameplay')}</h4>
  ${accToggle()}
- ${setSwitch(RUNE_GUIDE_ON,'✍️',t('settings.runeGuide'),t('settings.runeGuideHint'),'toggleRuneGuide()',t('settings.on'),t('settings.off'))}`;
+ ${setSwitch(RUNE_GUIDE_ON,'✍️',t('settings.runeGuide'),t('settings.runeGuideHint'),'toggleRuneGuide()',t('settings.on'),t('settings.off'))}
+ ${mobSettingsHTML()}`;
 }
 
 // ---------- ✨ Habilidades: a magia do mago ativo em destaque + o poder comum + as dos outros magos ----------

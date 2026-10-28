@@ -127,7 +127,7 @@ function pvpOnAtk(m){
  if(ok&&rsp==='gold'){d.bCap=Math.min(d.max,d.bCap+PVP.HEAL);floatTxt(BOT_POS.x+110,by-60,t('pvp.heal',{n:PVP.HEAL}),'#7dffbd',18);starBurst(BOT_POS.x,by-20,'#7dffbd',14,130,8)}
  if(ok&&rsp==='shield'){d.rShield=true;let mx=pvpCap(d,d.cur,d.balMe,true);for(const h of d.hits)if(G.time-h[0]<3)mx=Math.max(mx,h[1]);d.bCap=Math.min(d.max,d.bCap+mx)} // o escudo pode pegar um golpe já em trânsito
  // rs = reenvio após uma queda: o gelo daquele momento já passou
- if(ok&&rsp==='ice'&&!m.rs){d.frozen=PVP.ICE;floatTxt(TX,TTOP-160,t('pvp.frozen'),'#aef0ff',26);snd(1760,.3,'sine',.05,440)}
+ if(ok&&rsp==='ice'&&!m.rs){d.frozen=PVP.ICE;buzz('frozen');floatTxt(TX,TTOP-160,t('pvp.frozen'),'#aef0ff',26);snd(1760,.3,'sine',.05,440)}
  if(d.shield&&dmg>0){d.shield=false;dmg=0;floatTxt(TX,TTOP-110,t('pvp.blocked'),'#7ad0ff',24);addRing(TX,TTOP-40,40,100,.45,'#7ad0ff');snd(520,.2,'triangle',.05,1040)}
  if(dmg>0||(ok&&rsp==='crit'))pvpHitFx(dmg,rsp);
  d.php=Math.max(0,d.php-dmg);
@@ -138,7 +138,7 @@ function pvpHitFx(dmg,sp){
  const d=G.duel,by=BOT_POS.y+Math.sin(T*1.5)*4,col=sp?PVP_SP[sp].col:d.L.color;
  const bg=botGem(by);addBeam(bg.x,bg.y,TX,TTOP-40,col,.4,false);
  burst(TX,TTOP-40,'#ff4a6a',22,220);addRing(TX,TTOP-40,8,70,.35,col);
- d.phit=.3;d.batk=.35;G.shake=sp==='crit'?.6:.35;G.flash=.3;G.flashCol='#ff2a4a';
+ d.phit=.3;d.batk=.35;G.shake=sp==='crit'?.6:.35;buzz('hit');G.flash=.3;G.flashCol='#ff2a4a';
  floatTxt(TX+rand(100,150)*(Math.random()<.5?-1:1),TTOP-40,'-'+dmg,'#ff5a7a',sp==='crit'?32:24);snd(160,.3,'sawtooth',.06,60);
  if(sp==='crit')floatTxt(TX,TTOP-130,t('pvp.crit'),'#ff7a3a',24);
 }
@@ -161,7 +161,7 @@ function pvpUpdate(dt){
  if(!d.sdOn&&d.ft>=PVP.SD_T){d.sdOn=true;G.banner=2.2;G.bannerTxt=t('pvp.sd');snd(110,.8,'sawtooth',.06,55);MUS.heat=1}
  if((d.curveT+=dt)>=2){d.curveT=0;if(d.curve.length<90)d.curve.push(calcWpm())}
 }
-function pvpKo(){const d=G.duel;if(d.ending>0||state!=='play')return;d.ending=PVP.SETTLE;G.target.typed=0;snd(80,.6,'sawtooth',.07,40)}
+function pvpKo(){const d=G.duel;if(d.ending>0||state!=='play')return;d.ending=PVP.SETTLE;buzz('ko');G.target.typed=0;snd(80,.6,'sawtooth',.07,40)}
 // decide com os números de agora (já chegaram as mensagens em trânsito)
 function pvpResolve(){
  const d=G.duel;pvpRecalcB();const me=d.php<=0,them=d.bhp<=0;
@@ -248,12 +248,14 @@ function pvpEnd(res,reason){
 function showOnlineResult(r){
  const S=Net.series,done=S.me>=2||S.them>=2,ttl=r.res==='win'?'🏆 '+t('duel.victory'):r.res==='draw'?'🤝 '+t('pvp.drawTitle'):'💀 '+t('duel.defeat');
  const why=r.reason==='dc'?t('online.rivalLeft'):r.reason==='away'?t('pvp.away'):r.reason==='timeout'?t('pvp.timeout'):'';
+ const ms=G.duel.mySum||{};shareSet({head:ttl.replace(/^\S+\s/,''),sub:t('online.vs')+' '+r.rname,stats:[['WPM',ms.wpm|0],[t('hud.precision'),(ms.acc|0)+'%'],[t('stats.words'),ms.words|0]],
+  text:t(r.res==='win'?'mob.shareWin':'mob.shareDuel',{n:r.rname})}); // 📤 celular: resultado do duelo como imagem
  showOverlay(`<h2 class="${r.res==='loss'?'lose':''}">${ttl}</h2>
  <p>🌐 ${t('online.vs')} ${esc(r.rav)} <b>${esc(r.rname)}</b>${why?` · <span class="olbad">${why}</span>`:''}</p>
  <div class="pvpseries${done?' done':''}"><span>${t('pvp.series',{a:S.me,b:S.them})}${S.draws?' · 🤝 '+S.draws:''}</span>${done?`<b>${S.me>=2?t('pvp.seriesWin'):t('pvp.seriesLose')}</b>`:''}</div>
  <div id="pvpCmp" class="pvpcmp"></div>
  <div class="xpbox">${xpFooter(r.before)}${r.aura?`<div class="row"><span>✨ ${t('aura.name')}</span><b>+${r.aura}</b></div>`:''}</div><div id="lvSlot"></div><div class="rewards" id="rwSlot"></div>
- <div class="row2 pvpbtns"><button class="btn" id="pvpGo" onclick="Net.backToLobby()">🏰 ${t('pvp.lobby')}</button><button class="btn ghost" onclick="Net.leave();quitToMenu()">🏠 ${t('results.menu')}</button></div>
+ <div class="row2 pvpbtns"><button class="btn" id="pvpGo" onclick="Net.backToLobby()">🏰 ${t('pvp.lobby')}</button><button class="btn ghost" onclick="Net.leave();quitToMenu()">🏠 ${t('results.menu')}</button>${shareBtnHTML()}</div>
  <p class="pvprmst">${t('pvp.lobbyHint')}</p>`,'over pvpover');
  pvpRenderCmp();Net.autoLobby(8); // 🏰 volta ao lobby sozinho: lá os dois dizem se querem jogar de novo
  animateXp(r.before,r.xp,r.ups.flatMap(rewardsAt).filter(s=>!s.startsWith('🎁')));

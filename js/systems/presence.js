@@ -81,7 +81,7 @@ const Presence={
   let el=$('inviteToast');if(!el){el=document.createElement('div');el.id='inviteToast';el.className='invtoast';document.body.appendChild(el)}
   const n=esc((d.from&&d.from.name)||'?'),h=esc((d.from&&d.from.handle)||''),code=Net.parseCode(d.code);
   el.innerHTML=`<b>⚔️ ${t('presence.invited',{n})}</b><small>${h} · ${code}</small><div><button class="btn sm" id="invOk">${t('presence.accept')}</button><button class="btn ghost sm" id="invNo">${t('presence.decline')}</button></div>`;
-  el.classList.add('on');[880,1175,1568].forEach((f,i)=>snd(f,.15,'triangle',.05,0,i*.08));
+  el.classList.add('on');[880,1175,1568].forEach((f,i)=>snd(f,.15,'triangle',.05,0,i*.08));mobInviteNotify(d); // 🔔 celular com o jogo em segundo plano: notificação do sistema
   clearTimeout(this._it);this._it=setTimeout(()=>el.classList.remove('on'),30000);
   $('invNo').onclick=()=>el.classList.remove('on');
   $('invOk').onclick=()=>{el.classList.remove('on');if(state==='play'&&G&&G.duel&&G.duel.online)return;if(state==='play')pause();

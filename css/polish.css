@@ -338,3 +338,41 @@ body.song-mode .songside{display:flex;flex-direction:column;gap:10px;padding-top
 /* 📱 vídeo esperando toque/anúncio fica POR CIMA da tela de carregamento (no celular ela é fixa, z-index 50) */
 .songdock.ad{z-index:60}
 .songload .songtap{margin-top:6px;font-size:18px;padding:12px 28px;animation:olGo .7s ease-in-out infinite alternate}
+/* 📱 caixa do vídeo solta no celular: barrinha (arrastar / minimizar), tamanho fixo pelo JS */
+.songdock .sdbar{display:none}
+.songdock.free .sdbar{display:flex;gap:4px;position:absolute;right:6px;top:6px;z-index:2}
+.songdock.free{min-height:0;aspect-ratio:auto}
+.sdbar button{width:30px;height:30px;border-radius:9px;border:1px solid rgba(255,211,107,.55);background:rgba(6,8,26,.82);color:#ffe9a8;font:900 15px Nunito,sans-serif;line-height:1;padding:0;cursor:pointer;touch-action:none}
+.sdbar .sdgrip{cursor:grab}.songdock.drag{opacity:.85;transition:none}.songdock.drag .sdgrip{cursor:grabbing}
+.songdock.mini .sdbar button{width:24px;height:24px;font-size:12px}.songdock.mini:after{display:none}
+.songdock.free{z-index:45}.songdock.free.ad{z-index:60}
+
+/* 📱 extras do celular (mobile.js): aviso flutuante, chip "Instalar", tecla ampliada */
+.mobtoast{position:fixed;left:50%;top:calc(62px + env(safe-area-inset-top));transform:translate(-50%,-20px);z-index:95;width:min(92vw,420px);box-sizing:border-box;display:flex;flex-direction:column;gap:3px;padding:10px 14px;border-radius:14px;background:rgba(8,10,30,.96);border:1.5px solid rgba(233,200,120,.7);box-shadow:0 12px 30px rgba(0,0,0,.6);color:#e9ecff;font:700 13px/1.35 Nunito,sans-serif;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s}
+.mobtoast.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}.mobtoast b{color:#ffe9a8;font-size:14px}
+.pwachip{position:fixed;left:50%;bottom:calc(14px + env(safe-area-inset-bottom));transform:translate(-50%,30px);z-index:40;display:flex;align-items:center;gap:2px;padding:4px;border-radius:999px;background:rgba(8,10,30,.95);border:1.5px solid rgba(233,200,120,.75);box-shadow:0 8px 24px rgba(0,0,0,.55);opacity:0;pointer-events:none;transition:opacity .3s,transform .3s}
+.pwachip.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+.pwachip .pw-go{border:0;background:linear-gradient(#f3e3b8,#c9a660);color:#2a1a00;font:900 14px Nunito,sans-serif;padding:9px 16px;border-radius:999px}
+.pwachip .pw-x{border:0;background:none;color:#aab4dc;font:900 18px Nunito,sans-serif;width:34px;height:34px}
+.kpop{position:fixed;z-index:96;width:56px;height:60px;display:grid;place-items:center;border-radius:14px;background:linear-gradient(#2a3270,#141a44);border:2px solid #e9c878;color:#fff;font:900 30px Nunito,sans-serif;box-shadow:0 10px 22px rgba(0,0,0,.6);pointer-events:none;opacity:0;transform:translateY(8px) scale(.8)}
+.kpop.on{opacity:1;transform:none;transition:opacity .06s,transform .08s}
+.pwachip .pw-go{white-space:nowrap}
+
+/* 🧭 menu esquerdo: cada item com a sua cor (--ic), selo do ícone aceso, nome + linha curta, aviso em pílula brilhante */
+.left .nav .navgrp{gap:1px}
+.left .nav .navgrp .pill.ic{min-height:48px;padding:6px 8px 6px 7px;gap:10px}
+.left .nav .navgrp .pill.ic+.pill.ic{box-shadow:0 -1px 0 rgba(233,216,188,.06)}
+.left .nav .navgrp .pill.ic span{width:34px;height:34px;flex:0 0 34px;border-radius:11px;font-size:17px;display:grid;place-items:center;
+ background:radial-gradient(circle at 35% 25%,color-mix(in srgb,var(--ic) 55%,#fff 10%),color-mix(in srgb,var(--ic) 30%,#0a0f2a) 70%);
+ box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ic) 60%,transparent),inset 0 -6px 10px rgba(0,0,0,.35),0 4px 12px -4px color-mix(in srgb,var(--ic) 55%,transparent)}
+.left .nav .navgrp .pill.ic:hover span,.left .nav .navgrp .pill.ic:focus-visible span{box-shadow:inset 0 0 0 1px var(--ic),inset 0 -6px 10px rgba(0,0,0,.3),0 0 16px -2px var(--ic)}
+.left .nav .pill.ic:before{background:linear-gradient(var(--ic),color-mix(in srgb,var(--ic) 40%,#000))}
+.left .nav .pill.ic:hover,.left .nav .pill.ic:focus-visible{background:linear-gradient(90deg,color-mix(in srgb,var(--ic) 14%,transparent),transparent 75%);border-color:color-mix(in srgb,var(--ic) 22%,transparent)}
+.left .nav .pill .nt{display:flex;flex-direction:column;flex:1;min-width:0;line-height:1.15;text-align:left}
+.left .nav .pill .nt b{flex:none}
+.left .nav .pill .nt em{font-style:normal;font-size:10.5px;font-weight:700;color:var(--txt-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.left .nav .pill.hot .nt em{color:color-mix(in srgb,var(--ic) 70%,#fff)}
+.left .nav .pill.ic .badge{height:22px;min-width:22px;padding:0 7px;border-radius:999px;font:900 11px Nunito,sans-serif;display:inline-grid;place-items:center;color:#2a1000;
+ background:linear-gradient(#ffe9a8,#e9a84a);box-shadow:0 0 0 1px rgba(255,233,168,.6),0 0 12px rgba(255,190,90,.55);animation:navBadge 2.4s ease-in-out infinite}
+@keyframes navBadge{0%,100%{box-shadow:0 0 0 1px rgba(255,233,168,.6),0 0 8px rgba(255,190,90,.35)}50%{box-shadow:0 0 0 1px rgba(255,233,168,.9),0 0 16px rgba(255,190,90,.75)}}
+@media (prefers-reduced-motion:reduce){.left .nav .pill.ic .badge{animation:none}}

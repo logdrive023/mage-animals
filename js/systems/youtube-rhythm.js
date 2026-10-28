@@ -263,7 +263,7 @@ const Rhythm={
   showOverlay(`<div class="songload"><span class="spin" aria-hidden="true">🎵</span><b>${t('song.loading')}</b><small>${esc(tr.title||'')}</small></div>`,'glass');
   try{await ytLoad()}catch(e){this.fail('song.err.net');return}
   if(this.track!==tr)return; // trocou de faixa enquanto carregava
-  const dock=songDock(true);dock.innerHTML='<div id="ytPlayer"></div>';songDockAd(true); // até a música começar o vídeo aceita clique: anúncio antes da música → "Pular"
+  const dock=songDock(true);dock.innerHTML='<div id="ytPlayer"></div>'+SONG_DOCK_BAR;songDockAd(true); // até a música começar o vídeo aceita clique: anúncio antes da música → "Pular"
   // 📱 iPhone/Safari só toca vídeo com som depois de um TOQUE (o do menu se perde nas esperas acima): se em 2,5 s não começou,
   //  aparece o botão "Tocar" (o toque chama playVideo) e o vídeo sobe por cima da tela escura para dar para tocar nele também
   setTimeout(()=>{if(this.track!==tr||!this.needBegin)return;let st=-1;try{st=this.yt&&this.yt.getPlayerState()}catch(e){}
@@ -292,7 +292,7 @@ const Rhythm={
   hideOverlay();newGame();G.song=this.track;G.wave=1;G.banner=0;G.spawnLeft=0;G.boss=false;G.bossWave=false;this.playing=true;this.rt=performance.now();
   if(typeof musicMix==='function')musicMix();
   songSideShow(true);songDock(this.track.src==='yt'); // painel da música primeiro: o vídeo se encaixa no espaço dele
-  songDockAd(false);songRefocus();
+  songDockAd(false);songRefocus();mobRotateHint(); // 📱 em pé: sugere girar o celular
  },
  /** ▶ toque do jogador: libera o som no iPhone (o playVideo vai dentro do gesto) */
  tapPlay(){
@@ -317,8 +317,10 @@ const Rhythm={
   songSideUpdate(); // 🎵 painel da música (4×/s)
   if(tr.src==='yt'&&this.yt&&this.playing&&!this.paused){
    const now=performance.now();this.t+=(now-this.rt)/1000;this.rt=now;
+   // 📱 o tempo do player chega aos saltos (no iPhone ~1×/s): só corrige o relógio quando chega um valor NOVO — reler o
+   //  mesmo valor velho puxaria a música para trás a cada leitura (inimigos tremendo)
    if(now-this.ytRead>250){this.ytRead=now;try{const y=this.yt.getCurrentTime();const st=this.yt.getPlayerState();
-    if(st===YT.PlayerState.BUFFERING)this.t=y;else if(Math.abs(y-this.t)>.15)this.t=y;else this.t+=(y-this.t)*.25}catch(e){}}
+    if(st===YT.PlayerState.BUFFERING)this.t=y;else if(y!==this.yLast){this.yLast=y;if(Math.abs(y-this.t)>.35)this.t=y;else this.t+=(y-this.t)*.25}}catch(e){}}
   }
   const T0=this.now(),spb=60/(tr.bpm||100);
   // 🥁 pulso da batida: anel na torre e brilho no cajado (o mago "respira" no ritmo)
@@ -351,12 +353,12 @@ const Rhythm={
   if(e.lyric){ // frase: as palavras do meio só brilham; o julgamento vem na ÚLTIMA (pelo fim da frase cantada)
    if(e.hp>1){starBurst(e.x,e.y,e.lyric.chorus?'#ffe9a8':'#c9a6ff',6,90,0);return}
    const D=SONG_DIFF[this.diff||'normal'],d=this.now()-e.songT,j=d<=D.perfect?'perfect':d<=D.great?'great':'ok',n=e.lyric.words.length;
-   this.stats[j]++;this.lastJ=j;this.lastJT=1;
+   this.stats[j]++;this.lastJ=j;this.lastJT=1;if(j==='perfect')buzz('perfect');
    G.score+=Math.round(n*25*(SONG_PTS[j]-.6)*mult());if(j==='perfect'&&e.lyric.chorus)G.aura+=2; // refrão Perfeito: Aura extra
    floatTxt(e.x,e.y-e.r-30,t('song.j.'+j)+(n>1?' · '+n+'×':''),j==='perfect'?'#ffe9a8':j==='great'?'#9ae8ff':'#c6cde8',j==='perfect'?22:17);
    addRing(e.x,e.y,e.r,e.r*3,.45,e.lyric.chorus?'#ffe9a8':'#c9a6ff');return}
   const d=Math.abs(this.now()-e.songT),j=d<=SONG_JUDGE.perfect?'perfect':d<=SONG_JUDGE.great?'great':'ok';
-  this.stats[j]++;this.lastJ=j;this.lastJT=1;
+  this.stats[j]++;this.lastJ=j;this.lastJT=1;if(j==='perfect')buzz('perfect');
   const bonus=Math.round(e.word.length*10*(SONG_PTS[j]-1)*mult());if(bonus>0)G.score+=bonus;
   const col=j==='perfect'?'#ffe9a8':j==='great'?'#9ae8ff':'#c6cde8';floatTxt(e.x,e.y-e.r-30,t('song.j.'+j),col,j==='perfect'?20:16);
   if(j==='perfect'){const tp=staffTip(1);addRing(tp.x,tp.y,4,40,.3,'#ffe9a8')}
@@ -405,7 +407,10 @@ const Rhythm={
    const hot=Math.abs(e.songT-T0)<=SONG_JUDGE.perfect;c.globalAlpha=hot?.95:Math.max(.25,.75-dk*.4);c.strokeStyle=hot?'#ffe9a8':'#9ae8ff';
    c.beginPath();c.arc(lerpX(e),lerpY(e),e.r+6+Math.max(0,dk)*48,0,6.283);c.stroke()}
   c.restore();
-  c.save();c.fillStyle='rgba(6,8,26,.78)';c.beginPath();c.roundRect(x-10,y-8,w+20,44,12);c.fill();
+  // 📱 celular (iPhone/Android): o placar é HTML (#mhud) e maior → a caixa da música desce para logo abaixo dele, centrada e
+  //  ampliada (o canvas encolhe ~0,6× no celular; sem isso as letras ficam minúsculas e a caixa some atrás da onda/vidas)
+  const mob=songHudMob();c.save();if(mob){c.translate(TX,mob.y);c.scale(mob.s,mob.s);c.translate(-x-w/2,-y+8)}
+  c.fillStyle='rgba(6,8,26,.78)';c.beginPath();c.roundRect(x-10,y-8,w+20,44,12);c.fill();
   c.strokeStyle='rgba(233,216,188,.55)';c.lineWidth=1.2;c.stroke();
   c.fillStyle='rgba(255,255,255,.1)';c.fillRect(x,y+18,w,5);c.fillStyle=G.col;c.fillRect(x,y+18,w*k,5);
   c.fillStyle='#fff';c.beginPath();c.arc(x+w*k,y+20.5,3.5,0,6.283);c.fill();
@@ -415,17 +420,27 @@ const Rhythm={
   c.textAlign='right';c.fillStyle='#aab4dc';c.fillText(clock,x+w,y+8);
   c.font='800 10px Nunito';c.textAlign='center';c.fillStyle='#c6cde8';
   c.fillText(calcWpm()+' WPM · '+calcAcc()+'% · ✨'+this.stats.perfect+' 💫'+this.stats.great,x+w/2,y+33);
-  if(this.stalled){c.font='900 15px Nunito';c.fillStyle='rgba(6,8,26,.85)';c.beginPath();c.roundRect(TX-170,H/2-60,340,40,12);c.fill();c.strokeStyle='rgba(233,216,188,.6)';c.lineWidth=1.2;c.stroke();
-   c.fillStyle='#ffe9a8';c.fillText('📺 '+t('song.stall'),TX,H/2-34);
-   c.font='800 11px Nunito';c.fillStyle='rgba(233,216,188,.8)';c.fillText(t('song.stallTip'),TX,H/2-6)} // aviso: anúncio/carregamento, a partida espera
   const nx=this.hasLyrics?this.notes[this.ni]:null; // 🎤 próxima frase (prévia discreta sob o painel)
   if(nx&&nx.text&&!songSideOn()){c.font='italic 700 10.5px Nunito';c.fillStyle='rgba(233,216,188,.6)';c.fillText(fitTxt(c,'▸ '+nx.text,w+16),x+w/2,y+50)} // com o painel da música aberto, a próxima frase fica lá
+  c.restore();c.save();c.textAlign='center';
+  if(this.stalled){c.font='900 15px Nunito';c.fillStyle='rgba(6,8,26,.85)';c.beginPath();c.roundRect(TX-170,H/2-60,340,40,12);c.fill();c.strokeStyle='rgba(233,216,188,.6)';c.lineWidth=1.2;c.stroke();
+   c.fillStyle='#ffe9a8';c.fillText('📺 '+t('song.stall'),TX,H/2-34);
+   c.font='800 11px Nunito';c.fillStyle='rgba(233,216,188,.8)';c.fillText(fitTxt(c,t('song.stallTip'),330),TX,H/2-6)} // aviso: anúncio/carregamento, a partida espera
   if(this.lastJT>0){this.lastJT=Math.max(0,this.lastJT-1/60);c.globalAlpha=Math.min(1,this.lastJT*2);c.font='900 15px Cinzel';
    c.fillStyle=this.lastJ==='perfect'?'#ffe9a8':this.lastJ==='great'?'#9ae8ff':'#c6cde8';c.fillText(t('song.j.'+this.lastJ),TX,TTOP-150)}
   c.restore();
  }
 };
 
+/** 📱 posição da caixa da música no celular: logo abaixo do placar HTML, em coordenadas do canvas (refeito 2×/s) */
+let _shm={t:-1,v:null};
+function songHudMob(){
+ const now=performance.now();if(now-_shm.t<500)return _shm.v;_shm.t=now;_shm.v=null;
+ const mh=document.getElementById('mhud');if(!mh||getComputedStyle(mh).display==='none')return null;
+ const cr=cv.getBoundingClientRect(),k=cr.height/H;if(!k)return null;
+ const s=Math.min(cr.height<420?1.35:1.6,Math.max(1,.95/(cr.width/W))); // celular deitado: campo baixo → caixa menor // compensa o canvas encolhido (letras do tamanho de ~11 px na tela)
+ return _shm.v={y:(mh.getBoundingClientRect().bottom-cr.top)/k+6+8*s,s};
+}
 // ---------- espelho mágico: onde o vídeo aparece ----------
 // O YouTube exige o player VISÍVEL e com pelo menos 200×200 px → moldura fixa, sem cliques (o clique no iframe tiraria o foco
 // do jogo e pausaria a partida). No PC fica sobre o topo do painel direito; sem painel (janela estreita/celular), no canto.
@@ -446,10 +461,28 @@ function songRefocus(){
  k.focus({preventScroll:true});
  if(!document.hasFocus()&&state==='play')pause(); // saiu da janela durante o anúncio: a partida espera pausada
 }
+// 📱 caixa solta (celular / janela sem painel): barrinha com ✥ (arrastar) e ▁/▢ (minimizar). Posição e tamanho ficam salvos.
+const SONG_DOCK_BAR=`<div class="sdbar"><button class="sdgrip" tabindex="-1" aria-label="move" onmousedown="event.preventDefault()">✥</button><button class="sdmin" tabindex="-1" aria-label="minimize" onmousedown="event.preventDefault()" onclick="songDockMini()">▁</button></div>`;
+function songDockMini(){const m=!store.get('dockMini',true);store.set('dockMini',m);songDockPlace();snd(m?520:780,.05,'triangle',.03)}
+document.addEventListener('pointerdown',e=>{
+ const g=e.target.closest&&e.target.closest('#songDock .sdgrip');if(!g)return;e.preventDefault();
+ const d=document.getElementById('songDock'),r=d.getBoundingClientRect(),ox=e.clientX-r.left,oy=e.clientY-r.top;try{g.setPointerCapture(e.pointerId)}catch(_){}d.classList.add('drag');
+ const mv=ev=>{const x=Math.max(0,Math.min(innerWidth-r.width,ev.clientX-ox)),y=Math.max(0,Math.min(innerHeight-r.height,ev.clientY-oy));d.style.left=x+'px';d.style.top=y+'px'};
+ const up=()=>{g.removeEventListener('pointermove',mv);d.classList.remove('drag');store.set('dockPos',{x:parseFloat(d.style.left)/innerWidth,y:parseFloat(d.style.top)/innerHeight})};
+ g.addEventListener('pointermove',mv);g.addEventListener('pointerup',up,{once:true});g.addEventListener('pointercancel',up,{once:true});
+});
 function songDockPlace(){
  const d=document.getElementById('songDock');if(!d||!d.classList.contains('on'))return;
  const slot=document.getElementById('songDockSlot'),sr=slot&&document.body.classList.contains('song-mode')&&!DeviceManager.isMobile?slot.getBoundingClientRect():null;
+ d.classList.remove('free','mini');d.style.height='';
  if(sr&&sr.width>=200&&sr.height>0){d.style.left=Math.round(sr.left)+'px';d.style.top=Math.round(sr.top)+'px';d.style.width=Math.round(sr.width)+'px';d.style.right=d.style.bottom='auto';return} // 🎵 painel da música: o vídeo ocupa o espaço reservado no topo
+ if(DeviceManager.isMobile){ // 📱 celular: caixa solta, arrastável e minimizável
+  const mini=!!store.get('dockMini',true),w=mini?160:Math.min(300,innerWidth-16),h=mini?90:Math.max(200,w*9/16);d.classList.add('free');d.classList.toggle('mini',mini);
+  const sm=d.querySelector('.sdmin');if(sm)sm.textContent=mini?'▢':'▁';
+  const P=store.get('dockPos',null),st=document.querySelector('.stage'),s=st?st.getBoundingClientRect():{right:innerWidth,top:60};
+  let x=P?P.x*innerWidth:s.right-w-6,y=P?P.y*innerHeight:s.top+(s.bottom-s.top)*.36; // padrão: lado direito do campo, abaixo da caixa da música (longe do teclado)
+  x=Math.max(0,Math.min(innerWidth-w,x));y=Math.max(0,Math.min(innerHeight-h,y));
+  d.style.left=Math.round(x)+'px';d.style.top=Math.round(y)+'px';d.style.width=w+'px';d.style.height=h+'px';d.style.right=d.style.bottom='auto';return}
  const rp=document.getElementById('rightPanel'),r=rp&&!DeviceManager.isMobile?rp.getBoundingClientRect():null;
  if(r&&r.width>=240&&getComputedStyle(rp).opacity!=='0'){d.style.left=Math.round(r.left+8)+'px';d.style.top=Math.round(r.top+40)+'px';d.style.width=Math.round(Math.min(r.width-16,356))+'px';d.style.right=d.style.bottom='auto'}
  else{d.style.left=d.style.top='auto';d.style.right='10px';d.style.bottom='10px';d.style.width='228px'}
@@ -804,7 +837,7 @@ Object.assign(Rhythm,{
   const now=performance.now();
   if(now-this.stRead>150){this.stRead=now;try{const y=this.yt.getCurrentTime()||0;this.ytState=this.yt.getPlayerState();if(Math.abs(y-this.lastY)>.01||this.lastY<0){this.lastY=y;this.lastAdv=now;if(this.stalled){this.t=y;this.ytRead=now}}}catch(e){}}
   const notPlaying=typeof YT!=='undefined'&&this.ytState!=null&&this.ytState!==YT.PlayerState.PLAYING&&this.ytState!==YT.PlayerState.ENDED; // carregando/pausado pelo player: espera na hora
-  const st=(notPlaying||now-this.lastAdv>400)&&!this.ended;
+  const st=(notPlaying||now-this.lastAdv>1600)&&!this.ended; // 1,6 s: no iPhone o tempo do vídeo só anda ~1×/s (antes 0,4 s → "anúncio" falso, partida congelada)
   if(st)this.rt=now; // relógio não acumula enquanto espera
   if(st!==was){songDockAd(st);if(!st)songRefocus()}
   return this.stalled=st;

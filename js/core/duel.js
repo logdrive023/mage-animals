@@ -37,7 +37,7 @@ function duelLetter(ch){
  }else miss(ch);
 }
 function playerAttack(){
- const d=G.duel;if(d.online)return pvpAttack(); // online: dano, especiais e validação em pvp.js
+ const d=G.duel;buzz('word');if(d.online)return pvpAttack(); // online: dano, especiais e validação em pvp.js
  const e=G.target,len=e.nw.length,dmg=Math.round((5+len*1.3)*(1+Math.min(G.combo,10)*.08));
  const secs=Math.max(.08,G.time-(e.startT==null?G.time:e.startT));G.wordLog.push({word:e.word,secs,wpm:Math.min(300,Math.round(len/5/(secs/60)))});
  G.combo++;G.maxCombo=Math.max(G.maxCombo||0,G.combo);G.words++;questAdd('words',1);WordHistory.add(e.word);
@@ -53,7 +53,7 @@ function botAttack(){
  const d=G.duel,b=d.bot,dmg=Math.round(5+b.nw.length*1.3),by=BOT_POS.y+Math.sin(T*1.5)*4;
  const bg=botGem(by);addBeam(bg.x,bg.y,TX,TTOP-40,d.L.color,.4,false);
  burst(TX,TTOP-40,'#ff4a6a',22,220);addRing(TX,TTOP-40,8,70,.35,d.L.color);
- d.php=Math.max(0,d.php-dmg);d.phit=.3;d.batk=.35;G.shake=.35;G.flash=.3;G.flashCol='#ff2a4a';
+ d.php=Math.max(0,d.php-dmg);d.phit=.3;d.batk=.35;G.shake=.35;buzz('hit');G.flash=.3;G.flashCol='#ff2a4a';
  floatTxt(TX+rand(100,150)*(Math.random()<.5?-1:1),TTOP-40,'-'+dmg,'#ff5a7a',24);snd(160,.3,'sawtooth',.06,60);
  if(d.php<=0)return duelEnd(false);
  nextBotWord();b.delay=rand(.15,.45);

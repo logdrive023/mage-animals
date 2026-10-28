@@ -4,14 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#0b0d19">
+<!-- 📲 app instalável (iPhone e Android): manifest + ícones; sw.js deixa o jogo abrir sem internet -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png">
+<link rel="apple-touch-icon" href="assets/icon-180.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Mage Animals">
 <title>Mage Animals — Type to Cast</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/main.css?v=20261029s">
-<link rel="stylesheet" href="css/components.css?v=20261029s">
-<link rel="stylesheet" href="css/game.css?v=20261029s">
-<link rel="stylesheet" href="css/polish.css?v=20261029s">
+<link rel="stylesheet" href="css/main.css?v=20261029y">
+<link rel="stylesheet" href="css/components.css?v=20261029y">
+<link rel="stylesheet" href="css/game.css?v=20261029y">
+<link rel="stylesheet" href="css/polish.css?v=20261029y">
 </head>
 <body>
 <!-- MOBILE: barra superior com atalhos para as gavetas inferiores (no desktop fica oculta) -->
@@ -96,48 +104,49 @@
 <!-- Scripts clássicos (não-módulo): funcionam abrindo o arquivo direto no navegador (file://). A ordem importa. -->
 <!-- camada de efeitos de recompensa (partículas DOM sobre os modais) -->
 <div class="fxlayer" id="fxLayer" aria-hidden="true"></div>
-<script src="js/config/data.js?v=20261029s"></script>
-<script src="js/systems/storage.js?v=20261029s"></script>
-<script src="js/core/utils.js?v=20261029s"></script>
-<script src="js/core/device.js?v=20261029s"></script>
-<script src="js/config/i18n.js?v=20261029s"></script>
-<script src="js/config/dictionary.js?v=20261029s"></script>
-<script src="js/systems/wordhistory.js?v=20261029s"></script>
-<script src="js/core/pool.js?v=20261029s"></script>
-<script src="js/core/player.js?v=20261029s"></script>
-<script src="js/systems/profile.js?v=20261029s"></script>
-<script src="js/systems/story.js?v=20261029s"></script>
-<script src="js/systems/village.js?v=20261029s"></script>
-<script src="js/render/villagemap.js?v=20261029s"></script>
-<script src="js/systems/inventory.js?v=20261029s"></script>
-<script src="js/systems/chests.js?v=20261029s"></script>
-<script src="js/audio/audio.js?v=20261029s"></script>
-<script src="js/core/render.js?v=20261029s"></script>
-<script src="js/core/scenery.js?v=20261029s"></script>
-<script src="js/render/chars-sheet.data.js?v=20261029s"></script>
-<script src="js/render/sprites.js?v=20261029s"></script>
-<script src="js/render/vignettes.js?v=20261029s"></script>
-<script src="js/render/atmos.js?v=20261029s"></script>
-<script src="js/render/runes.js?v=20261029s"></script>
-<script src="js/systems/difficulty.js?v=20261029s"></script>
-<script src="js/systems/combat.js?v=20261029s"></script>
-<script src="js/systems/meta.js?v=20261029s"></script>
-<script src="js/systems/youtube-rhythm.js?v=20261029s"></script>
-<script src="js/core/game.js?v=20261029s"></script>
-<script src="js/core/duel.js?v=20261029s"></script>
-<script src="js/ui/ui.js?v=20261029s"></script>
-<script src="js/ui/modal-adventure.js?v=20261029s"></script>
-<script src="js/ui/modal-chests.js?v=20261029s"></script>
-<script src="js/ui/modal-how-to-play.js?v=20261029s"></script>
-<script src="js/ui/modal-profile.js?v=20261029s"></script>
-<script src="js/ui/modal-dictionary.js?v=20261029s"></script>
-<script src="js/ui/battle-history.js?v=20261029s"></script>
-<script src="js/systems/dialogues.js?v=20261029s"></script>
-<script src="js/input/gesture.js?v=20261029s"></script>
-<script src="js/systems/multiplayer.js?v=20261029s"></script>
-<script src="js/systems/pvp.js?v=20261029s"></script>
-<script src="js/systems/friends.js?v=20261029s"></script>
-<script src="js/systems/presence.js?v=20261029s"></script>
-<script src="js/main.js?v=20261029s"></script>
+<script src="js/config/data.js?v=20261029y"></script>
+<script src="js/systems/storage.js?v=20261029y"></script>
+<script src="js/core/utils.js?v=20261029y"></script>
+<script src="js/core/device.js?v=20261029y"></script>
+<script src="js/config/i18n.js?v=20261029y"></script>
+<script src="js/config/dictionary.js?v=20261029y"></script>
+<script src="js/systems/wordhistory.js?v=20261029y"></script>
+<script src="js/core/pool.js?v=20261029y"></script>
+<script src="js/core/player.js?v=20261029y"></script>
+<script src="js/systems/profile.js?v=20261029y"></script>
+<script src="js/systems/story.js?v=20261029y"></script>
+<script src="js/systems/village.js?v=20261029y"></script>
+<script src="js/render/villagemap.js?v=20261029y"></script>
+<script src="js/systems/inventory.js?v=20261029y"></script>
+<script src="js/systems/chests.js?v=20261029y"></script>
+<script src="js/audio/audio.js?v=20261029y"></script>
+<script src="js/core/render.js?v=20261029y"></script>
+<script src="js/core/scenery.js?v=20261029y"></script>
+<script src="js/render/chars-sheet.data.js?v=20261029y"></script>
+<script src="js/render/sprites.js?v=20261029y"></script>
+<script src="js/render/vignettes.js?v=20261029y"></script>
+<script src="js/render/atmos.js?v=20261029y"></script>
+<script src="js/render/runes.js?v=20261029y"></script>
+<script src="js/systems/difficulty.js?v=20261029y"></script>
+<script src="js/systems/combat.js?v=20261029y"></script>
+<script src="js/systems/meta.js?v=20261029y"></script>
+<script src="js/systems/youtube-rhythm.js?v=20261029y"></script>
+<script src="js/core/game.js?v=20261029y"></script>
+<script src="js/core/duel.js?v=20261029y"></script>
+<script src="js/ui/ui.js?v=20261029y"></script>
+<script src="js/ui/modal-adventure.js?v=20261029y"></script>
+<script src="js/ui/modal-chests.js?v=20261029y"></script>
+<script src="js/ui/modal-how-to-play.js?v=20261029y"></script>
+<script src="js/ui/modal-profile.js?v=20261029y"></script>
+<script src="js/ui/modal-dictionary.js?v=20261029y"></script>
+<script src="js/ui/battle-history.js?v=20261029y"></script>
+<script src="js/systems/dialogues.js?v=20261029y"></script>
+<script src="js/input/gesture.js?v=20261029y"></script>
+<script src="js/systems/multiplayer.js?v=20261029y"></script>
+<script src="js/systems/pvp.js?v=20261029y"></script>
+<script src="js/systems/friends.js?v=20261029y"></script>
+<script src="js/systems/presence.js?v=20261029y"></script>
+<script src="js/systems/mobile.js?v=20261029y"></script>
+<script src="js/main.js?v=20261029y"></script>
 </body>
 </html>

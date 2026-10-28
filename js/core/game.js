@@ -250,7 +250,7 @@ function fire(e){
   for(let i=G.enemies.length-1;i>=0;i--){const o=G.enemies[i];if(o!==e&&Math.hypot(o.x-e.x,o.y-e.y)<sR)damage(o,1,false)}}
  if(ch.spell==='vortice')addRing(e.x,e.y,e.r*2.4,4,.4,col);
  if(ch.spell==='cometa')addRing(e.x,e.y,6,44,.3,col);
- G.combo++;G.maxCombo=Math.max(G.maxCombo||0,G.combo);
+ G.combo++;G.maxCombo=Math.max(G.maxCombo||0,G.combo);buzz('word'); // 📳 toque curto a cada palavra
  if(G.combo%4===0)floatTxt(TX,TTOP-130,t('hud.combo')+' x'+mult(),'#5ad0ff',20);
  arcWordDone(); // ⚡ sequência perfeita → Sobrecarga Arcana
  if(G.song)Rhythm.judge(e); // 🎵 Perfeito/Ótimo pelo tempo da nota
@@ -259,7 +259,7 @@ function fire(e){
 }
 function hitTower(e){
  if(G.song)Rhythm.missNote(e);
- const x=e.x,y=e.y,r=e.r,big=e.kind==='boss';
+ const x=e.x,y=e.y,r=e.r,big=e.kind==='boss';if(!e.gem)buzz('tower'); // 📳 celular: tranco quando a torre apanha
  if(e.gem){const gc=e.gc;releaseEnemy(e);burst(x,y,gc,10,160);return} // 💎 Chuva de Cristais: sem dano na torre
  G.lives-=big?2:1;if(G.lost[G.lost.length-1]!==G.wave)G.lost.push(G.wave); // 📅 grade do resultado compartilhável
  // 💀 golpe final: o inimigo fica na tela, congelado, com a palavra do jeito que estava (ver showGameOver)
@@ -270,7 +270,7 @@ function hitTower(e){
  if(G.mode==='arcade'&&low&&!G.mercyOn){G.mercyOn=true;G.mercyN=2;floatTxt(TX,TTOP-120,t('hud.mercy'),'#7dffbd',18)} // vida ≤ 1/3: alívio (1× por queda)
 }
 function gameOver(){
- state='over';G.overAt=performance.now();setOverloadFx(false);setFrozenFx(false);setDangerFx(0);Meta.save();
+ state='over';G.overAt=performance.now();buzz('over');setOverloadFx(false);setFrozenFx(false);setDangerFx(0);Meta.save();
  const song=G.song?Rhythm.finish():null; // 🎵 Aura do ritmo + histórico da faixa (antes do resultado: a Aura entra nele)
  const result=finishMatch({score:G.score,wave:G.wave,words:G.words,kills:G.kills,bosses:G.bosses,time:G.time,correct:G.correct,errors:G.errors,wpm:calcWpm(),peak:peakWpm(G.wordLog),acc:calcAcc(),wordLog:G.wordLog,aura:G.aura,overN:G.overN,lastHit:G.lastHit,clutch:G.clutch,
   ch:G.ch.id,bl:G.blTxt,nemN:G.nemN,domN:G.domN,song});
@@ -334,7 +334,7 @@ function miss(ch){
  // misericórdia por erros seguidos: todos os modos
  if(G.mode==='arcade'&&++G.missRow>=MOBILE_TUNING.mercy.misses){G.missRow=0;let n=null;for(let i=0;i<G.enemies.length;i++){const e=G.enemies[i];if(!n||e.y>n.y)n=e}
   if(n){n.mercy=MOBILE_TUNING.mercy.time;floatTxt(n.x,n.y-n.r-16,t('hud.mercy'),'#7dffbd',15)}}
- G.errors++;G.noteRun=0;if(G.song)Rhythm.onMiss();if(G.runes)G.guideHot=1;recentPush(0);musicMiss();flashKey(norm(ch),'err');snd(140,.12,'sawtooth',.035);
+ G.errors++;G.noteRun=0;buzz('miss');if(G.song)Rhythm.onMiss();if(G.runes)G.guideHot=1;recentPush(0);musicMiss();flashKey(norm(ch),'err');snd(140,.12,'sawtooth',.035);
  if(G.mode==='arcade')wizMiss(); // 🎭 engasgo do mago (pulinho, cabeça sacode, gema pisca vermelho)
  if(G.target){if(!G.target.lastErr&&G.mode==='arcade')Meta.nemMiss(G.target);G.target.lastErr=ch} // 💀 mostrado na derrota · 😈 1 erro por palavra conta para a nêmesis
  arcBreak(); // ⚡ qualquer erro encerra a sequência perfeita (e a Sobrecarga)
@@ -606,12 +606,15 @@ function drawFpsBadge(){
 // ================== LOOP (passo fixo 60 Hz + interpolação + pausa em segundo plano) ==================
 const STEP=1/60,MAX_STEPS=4;
 let physAcc=0,lastT=0,rafId=0,uiT=0,sideT=0,pausedFrame=false;
+let LOW_FPS=false; // 🔋 celular economizando bateria: desenha a 30 FPS (a física continua no passo fixo de 60 Hz) — ver mobile.js
 // teclado virtual e medidores só aparecem durante a partida; no menu/fim de jogo o canvas ganha o espaço
 let chromeMenu=null;
 let chromePlay=null;const appEl=document.getElementById('app'),panelEl=document.querySelector('.gamepanel');
 function syncChrome(){const m=state==='menu'||state==='over',p=state==='play';if(m!==chromeMenu){chromeMenu=m;panelEl.classList.toggle('menu-mode',m);fitMenuMobile()}if(p!==chromePlay){chromePlay=p;appEl.classList.toggle('playing',p);document.body.classList.toggle('playing',p);fitMenuMobile()}}
 function loop(now){
- rafId=requestAnimationFrame(loop);syncChrome();const w0=performance.now();
+ rafId=requestAnimationFrame(loop);
+ if(LOW_FPS&&now-lastT<30)return; // 🔋 pula um quadro sim, outro não (o tempo acumulado entra no próximo)
+ syncChrome();const w0=performance.now();
  let dt=(now-lastT)/1000;lastT=now;
  if(!(dt>0))dt=0;if(dt>.1)dt=.1; // trava contra saltos (aba voltou, travada do sistema)
  T+=dt;perfSample(dt);
