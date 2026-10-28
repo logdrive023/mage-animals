@@ -337,6 +337,20 @@ function drawAura(c,col){
  for(const m of MOTES){const a=m.a+T*m.sp,ph=(T*.12+m.ph)%1,x=TX+Math.cos(a)*m.r,y=TTOP-6-ph*m.rise*6+Math.sin(a)*m.r*.22;c.globalAlpha=Math.sin(ph*Math.PI)*.75;const d=(m.s*7)|0;c.drawImage(sp,(x-d/2)|0,(y-d/2)|0,d,d)}
  c.globalAlpha=1;c.globalCompositeOperation='source-over';
 }
+// 💡 contraluz da gema nas ameias: a luz do cristal só pinta a PEDRA da frente da torre (o desenho das ameias vira máscara
+//  com 'source-in'), mais forte perto da gema, ao lançar e na Sobrecarga; gelada enquanto o campo está congelado.
+//  Só na qualidade alta (no modo leve/celular fica de fora: são 2 cópias de uma faixa pequena por quadro)
+let merlCv=null,merlCx=null;
+function drawGemOnMerlons(c,front,col){
+ if(!PERF.hq)return;
+ if(!merlCv){merlCv=mkCanvas(front.lw,front.lh);merlCx=merlCv.getContext('2d')}
+ const tp=staffTip(castGlow),gx=tp.x-TOWER_OX,gy=tp.y-TOWER_OY,w=merlCv.lw,h=merlCv.lh,L=SCENE_LIGHT;
+ const k=Math.min(1,.32+castGlow*.45+WIZ_ANIM.strike*.2+L.ov*.18+.05*Math.sin(T*1.8)),cc=L.fz>.5?mix(col,'#aef0ff',.5):col;
+ merlCx.globalCompositeOperation='source-over';merlCx.clearRect(0,0,w,h);merlCx.drawImage(front,0,0,w,h);
+ merlCx.globalCompositeOperation='source-in';const g=merlCx.createRadialGradient(gx,gy,6,gx,gy,150);g.addColorStop(0,hexA(cc,k));g.addColorStop(.45,hexA(cc,k*.35));g.addColorStop(1,hexA(cc,0));
+ merlCx.fillStyle=g;merlCx.fillRect(0,0,w,h);merlCx.globalCompositeOperation='source-over';
+ c.globalCompositeOperation='lighter';c.drawImage(merlCv,TOWER_OX,TOWER_OY,w,h);c.globalCompositeOperation='source-over';
+}
 function drawLighting(c,col){
  // 🎭 gema: pulso CALMO no repouso (~0,3 Hz); no perigo pulsa rápido e mais forte; no triunfo dá um clarão
  const A=WIZ_ANIM,d=A.danger,tr=A.triumph>0?Math.sin(Math.PI*Math.min(1,(1-A.triumph)*1.6)):0;
@@ -371,6 +385,7 @@ function drawTowerAndMage(c,ch,col){
  drawWizardLit(c,ch,T,castGlow,col,PERF.hq);
  if(TOWER_USE_BACK&&typeof Sprites!=='undefined'&&Sprites.hasBack(ch.id))drawParapet(c); // 🔙 mago de costas: parapeito na frente
  c.drawImage(ts.front,TOWER_OX,TOWER_OY);
+ drawGemOnMerlons(c,ts.front,col); // 💡 contraluz da gema pintando as ameias
  if(TH.kind!=='ocean'){drawTorch(c,TX-71,TTOP-12);drawTorch(c,TX+71,TTOP-12)}
  drawAura(c,col);
  drawLighting(c,col);

@@ -168,6 +168,8 @@ function finishMatch(m){
  const mc=typeof G!=='undefined'&&G?G.maxCombo|0:0;profile.bestPeak=Math.max(profile.bestPeak|0,m.peak|0);profile.bestCombo=Math.max(profile.bestCombo|0,mc); // 📊 recordes para as Estatísticas
  questAdd('games',1);questMax('wave',m.wave);questMax('combo',mc);if(m.acc>=95&&m.words>=30)questAdd('accGames',1); // 📋 missões novas
  if(m.song){questAdd('songs',1);questAdd('perfects',m.song.perfect|0)}
+ else if(GAME_STYLE==='runes')questAdd('runeGames',1);else if(GAME_STYLE==='letters')questAdd('letterGames',1); // 📋 variedade: jogar nos outros modos
+ if(typeof G!=='undefined'&&G&&G.daily)questAdd('dailyRuns',1);
  if(m.aura>0)profile.aura=(profile.aura||0)+m.aura; // ✨ Aura da partida (mini-chefe + Chuva de Cristais, ×2 na Sobrecarga)
  profile.totalTime+=m.time;profile.totalCorrect+=m.correct;profile.totalErrors+=m.errors;
  if(m.words>=50)profile.bestAcc=Math.max(profile.bestAcc,m.acc);

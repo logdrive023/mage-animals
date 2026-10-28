@@ -40,7 +40,7 @@ const ARC_GOLD='#fff1a8';
 function arcWordDone(){
  if(!arcOn())return;G.streak++;
  if(!G.over&&G.streak>=arcOverAt()){
-  G.over=true;setOverloadFx(true);G.overN++;
+  G.over=true;setOverloadFx(true);G.overN++;questAdd('overloads',1);arcDust('over');
   floatTxt(TX,TTOP-170,t('arc.overload'),'#ffd24a',30);addRing(TX,TTOP-60,10,200,.6,'#ffd24a');G.flash=Math.max(G.flash,.35);G.flashCol='#ffd24a';
   [659,880,1175,1568].forEach((f,i)=>snd(f,.16,'triangle',.05,0,i*.06));MUS.heat=1;
  }
@@ -63,7 +63,7 @@ function arcFreeze(){
  if(!arcCanCast('freeze')){arcDeny();return}questAdd('spells',1);
  G.mana-=arcCost('freeze');G.frozen=ARC.FREEZE_T;G.cdF=ARC.FREEZE_CD*arcCdMul();setFrozenFx(true);wizFreeze(); // 🎭 finca o cajado + pulso de gelo
  for(let i=0;i<G.enemies.length;i++){const e=G.enemies[i];addRing(e.x,e.y,e.r*.6,e.r*2,.5,'#aef0ff');burst(e.x,e.y,'#dff8ff',8,140)}
- G.flash=.4;G.flashCol='#aef0ff';floatTxt(TX,TTOP-160,t('arc.frozen'),'#bff4ff',28);
+ G.flash=.4;G.flashCol='#aef0ff';floatTxt(TX,TTOP-160,t('arc.frozen'),'#bff4ff',28);arcDust('freeze');
  snd(1760,.5,'sine',.05,880);snd(1320,.4,'triangle',.04,660,.06);
 }
 // o "mais perigoso": o mais perto da torre, com peso para Invocadores e chefes
@@ -78,10 +78,23 @@ function arcBlast(){
  G.mana-=arcCost('blast');G.cdB=ARC.BLAST_CD*arcCdMul();wizArcana(); // 🎭 postura de poder com as duas patas + clarão branco
  const tp=staffTip(1);castGlow=1;addRing(TX,TTOP-40,20,260,.6,'#ff7ad0');addRing(TX,TTOP-40,10,180,.45,'#ffffff');
  for(const e of hit){addBeam(tp.x,tp.y,e.x,e.y,'#ff9ad8',.45,true);addRing(e.x,e.y,6,e.r*2.4,.4,'#ff7ad0')}
- G.shake=.7;G.flash=.45;G.flashCol='#ff7ad0';floatTxt(TX,TTOP-160,t('arc.blast'),'#ffb0e8',26);snd(160,.6,'sawtooth',.07,50);snd(900,.35,'triangle',.05,200,.04);
+ G.shake=.7;G.flash=.45;G.flashCol='#ff7ad0';floatTxt(TX,TTOP-160,t('arc.blast'),'#ffb0e8',26);snd(160,.6,'sawtooth',.07,50);snd(900,.35,'triangle',.05,200,.04);arcDust('blast');
  for(const e of hit)if(G.enemies.includes(e))damage(e,e.kind==='boss'?1:99,false);
 }
 function arcDeny(){snd(180,.1,'square',.03);shakeInput()}
+// ✨ poeira mágica dos feitiços (partículas do pool; qn() corta para 45% no modo leve, então o celular continua a 60 FPS)
+//  rajada ao lançar: Congelar = neve fina no campo todo · Arcana = pó dourado-rosa caindo · Sobrecarga = faíscas subindo da torre
+function arcDust(kind){
+ if(kind==='freeze'){for(let i=0,n=qn(30);i<n;i++)emit(PT.STAR,rand(20,W-20),rand(100,H-150),rand(-14,14),rand(4,22),rand(1.2,2.2),i%2?'#dff8ff':'#aef0ff',rand(.8,1.7),1.3,6)}
+ else if(kind==='blast'){for(let i=0,n=qn(36);i<n;i++)emit(PT.STAR,rand(40,W-40),rand(100,H*.62),rand(-24,24),rand(8,40),rand(1,1.9),i%3?'#ffd6f0':'#ffe9a8',rand(1,2.1),1.5,22)}
+ else if(kind==='over'){for(let i=0,n=qn(28);i<n;i++)emit(PT.STAR,TX+rand(-70,70),TTOP-rand(-10,70),rand(-30,30),-rand(40,120),rand(.8,1.5),i%3?'#ffd24a':'#c9a6ff',rand(1.2,2.2),1.2,-18)}
+}
+// véu contínuo enquanto o efeito dura: ~20 grãos/s de neve (Congelar) e ~14 faíscas/s subindo da torre (Sobrecarga)
+function arcDustTick(dt){
+ if(!G||G.mode!=='arcade')return;
+ if(G.frozen>0&&Math.random()<dt*qn(20))emit(PT.STAR,rand(0,W),rand(100,H-150),rand(-8,8),rand(6,20),rand(1.2,2),Math.random()<.5?'#dff8ff':'#aef0ff',rand(.8,1.5),1.4,4);
+ if(G.over&&Math.random()<dt*qn(14))emit(PT.STAR,TX+rand(-55,55),TTOP+rand(-10,25),rand(-10,10),-rand(30,70),rand(.9,1.6),Math.random()<.5?'#ffd24a':'#c9a6ff',rand(1,1.8),1.2,-10);
+}
 function setFrozenFx(on){const s=document.querySelector('.stage');if(s)s.classList.toggle('frozen',!!on)}
 
 // ---------- 3. Inimigos táticos (marcas aplicadas no spawn; o pool reaproveita objetos, então tudo é zerado aqui) ----------

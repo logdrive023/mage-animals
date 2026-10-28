@@ -353,12 +353,12 @@ const Rhythm={
   if(e.lyric){ // frase: as palavras do meio só brilham; o julgamento vem na ÚLTIMA (pelo fim da frase cantada)
    if(e.hp>1){starBurst(e.x,e.y,e.lyric.chorus?'#ffe9a8':'#c9a6ff',6,90,0);return}
    const D=SONG_DIFF[this.diff||'normal'],d=this.now()-e.songT,j=d<=D.perfect?'perfect':d<=D.great?'great':'ok',n=e.lyric.words.length;
-   this.stats[j]++;this.lastJ=j;this.lastJT=1;if(j==='perfect')buzz('perfect');
+   this.stats[j]++;this.lastJ=j;this.lastJT=1;if(j==='perfect'){buzz('perfect');songPerfectFx()}
    G.score+=Math.round(n*25*(SONG_PTS[j]-.6)*mult());if(j==='perfect'&&e.lyric.chorus)G.aura+=2; // refrão Perfeito: Aura extra
    floatTxt(e.x,e.y-e.r-30,t('song.j.'+j)+(n>1?' · '+n+'×':''),j==='perfect'?'#ffe9a8':j==='great'?'#9ae8ff':'#c6cde8',j==='perfect'?22:17);
    addRing(e.x,e.y,e.r,e.r*3,.45,e.lyric.chorus?'#ffe9a8':'#c9a6ff');return}
   const d=Math.abs(this.now()-e.songT),j=d<=SONG_JUDGE.perfect?'perfect':d<=SONG_JUDGE.great?'great':'ok';
-  this.stats[j]++;this.lastJ=j;this.lastJT=1;if(j==='perfect')buzz('perfect');
+  this.stats[j]++;this.lastJ=j;this.lastJT=1;if(j==='perfect'){buzz('perfect');songPerfectFx()}
   const bonus=Math.round(e.word.length*10*(SONG_PTS[j]-1)*mult());if(bonus>0)G.score+=bonus;
   const col=j==='perfect'?'#ffe9a8':j==='great'?'#9ae8ff':'#c6cde8';floatTxt(e.x,e.y-e.r-30,t('song.j.'+j),col,j==='perfect'?20:16);
   if(j==='perfect'){const tp=staffTip(1);addRing(tp.x,tp.y,4,40,.3,'#ffe9a8')}
@@ -432,6 +432,11 @@ const Rhythm={
  }
 };
 
+/** 🎵 Perfeito no tempo da música: o mago ergue o cajado um instante (pose do triunfo, mais curta) e a gema solta faíscas douradas */
+function songPerfectFx(){
+ if(typeof WIZ_ANIM==='undefined')return;WIZ_ANIM.triumph=Math.max(WIZ_ANIM.triumph,.55);castGlow=1;
+ const tp=staffTip(1);starBurst(tp.x,tp.y-10,'#ffe9a8',qn(10),120,-30);
+}
 /** 📱 posição da caixa da música no celular: logo abaixo do placar HTML, em coordenadas do canvas (refeito 2×/s) */
 let _shm={t:-1,v:null};
 function songHudMob(){

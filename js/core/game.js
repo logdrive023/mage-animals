@@ -378,6 +378,7 @@ function update(dt){
  // ⚔️ camadas do arcade (js/systems/combat.js)
  G.cdF=Math.max(0,G.cdF-dt);G.cdB=Math.max(0,G.cdB-dt);if(G.over)MUS.heat=Math.max(MUS.heat,.92);
  const frozen=G.frozen>0;if(frozen&&(G.frozen-=dt)<=0){G.frozen=0;setFrozenFx(false)}
+ arcDustTick(dt); // ✨ véu de poeira mágica enquanto Congelar / Sobrecarga duram
  if(G.song)Rhythm.tick(dt);
  else if(G.bonus>0){if(G.banner<1.6)arcBonusUpdate(dt)}
  else if(G.banner<1.6&&!frozen){

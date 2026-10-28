@@ -132,7 +132,12 @@ const QUESTS={
   {id:'d_wave',ic:'🌊',tone:'gold',cat:'battle',stat:'wave',goal:8,reward:{xp:200}},
   {id:'d_village',ic:'🏛️',tone:'green',cat:'realm',stat:'village',goal:2,reward:{aura:40}},
   {id:'d_songs',ic:'🎵',tone:'violet',cat:'music',stat:'songs',goal:1,reward:{xp:150,aura:20}},
-  {id:'d_games',ic:'🎮',tone:'blue',cat:'battle',stat:'games',goal:3,reward:{xp:120}}
+  {id:'d_games',ic:'🎮',tone:'blue',cat:'battle',stat:'games',goal:3,reward:{xp:120}},
+  {id:'d_over',ic:'⚡',tone:'gold',cat:'type',stat:'overloads',goal:2,reward:{xp:160,aura:20}},
+  {id:'d_runes',ic:'🔮',tone:'violet',cat:'battle',stat:'runeGames',goal:1,reward:{xp:140,aura:15}},
+  {id:'d_letters',ic:'✍️',tone:'green',cat:'battle',stat:'letterGames',goal:1,reward:{xp:120,aura:15}},
+  {id:'d_daily',ic:'📅',tone:'fire',cat:'battle',stat:'dailyRuns',goal:1,reward:{aura:35}},
+  {id:'d_chests',ic:'🎁',tone:'gold',cat:'realm',stat:'chestsOpened',goal:1,reward:{xp:100}}
  ],
  weekly:[
   {id:'w_words',ic:'📖',tone:'blue',cat:'type',stat:'words',goal:1500,reward:{xp:400,aura:80},fixed:true},
@@ -145,10 +150,15 @@ const QUESTS={
   {id:'w_nem',ic:'😈',tone:'violet',cat:'type',stat:'nemesis',goal:10,reward:{xp:450,aura:120}},
   {id:'w_village',ic:'🏛️',tone:'green',cat:'realm',stat:'village',goal:10,reward:{aura:200}},
   {id:'w_combo',ic:'🔥',tone:'gold',cat:'type',stat:'combo',goal:50,reward:{xp:500,chests:1}},
-  {id:'w_perfect',ic:'✨',tone:'violet',cat:'music',stat:'perfects',goal:60,reward:{xp:450,aura:120}}
+  {id:'w_perfect',ic:'✨',tone:'violet',cat:'music',stat:'perfects',goal:60,reward:{xp:450,aura:120}},
+  {id:'w_over',ic:'⚡',tone:'gold',cat:'type',stat:'overloads',goal:12,reward:{xp:500,aura:120}},
+  {id:'w_daily',ic:'📅',tone:'fire',cat:'battle',stat:'dailyRuns',goal:5,reward:{aura:200,chests:1}},
+  {id:'w_chests',ic:'🎁',tone:'gold',cat:'realm',stat:'chestsOpened',goal:6,reward:{xp:400,aura:80}},
+  {id:'w_songs',ic:'🎵',tone:'violet',cat:'music',stat:'songs',goal:5,reward:{xp:400,aura:100}}
  ]
 };
-const Q_STATS=['words','duelWins','onlineDuels','onlineWins','bosses','zombieWave','accGames','spells','nemesis','combo','wave','village','songs','perfects','games'];
+// overloads = Sobrecargas ativadas · runeGames/letterGames = partidas nos modos Runas/Letras · dailyRuns = Desafios do dia · chestsOpened = baús abertos
+const Q_STATS=['words','duelWins','onlineDuels','onlineWins','bosses','zombieWave','accGames','spells','nemesis','combo','wave','village','songs','perfects','games','overloads','runeGames','letterGames','dailyRuns','chestsOpened'];
 
 // Calendário de login de 7 dias
 // Ofensiva de 7 dias: recompensas crescentes; o Dia 7 é o Baú Arcano Lendário

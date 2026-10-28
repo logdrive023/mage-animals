@@ -24,7 +24,7 @@ const ChestUI={
  },
  /** abre 1 baú (all=false) ou todos (all=true) */
  start(all){
-  const list=Chests.openMany(all?Chests.count():1);if(!list)return;
+  const list=Chests.openMany(all?Chests.count():1);if(!list)return;questAdd('chestsOpened',list.length); // 📋 missão "abra baús"
   this.build();this.list=list;this.idx=0;this.done=false;this.open=true;this.clear();
   const n=list.length,el=this.el;
   el.className='cx'+(n===1?' one':n>6?' many':'');
