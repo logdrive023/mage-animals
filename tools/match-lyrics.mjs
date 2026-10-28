@@ -61,7 +61,9 @@ function align(L, G) {
  *  uma fala, máx. 0,4, pois a legenda às vezes junta 2 linhas numa fala), e trocar de ajuste custa SWITCH. Assim o ajuste só
  *  muda quando um trecho inteiro do clipe se desloca (cena no meio), nunca pulando linha a linha. Depois, a linha que cai a
  *  até 0,5 s de um início de fala encosta exatamente nele. */
-const SWITCH = 2.5, OMIN = -20, OSTEP = 0.1, ON = 1401;
+// OFFW: custo por segundo de ajuste em cada linha — música repetitiva (refrão em intervalo fixo, ex.: Happy) "encaixa" também
+//  deslocada um ciclo inteiro (+47 s); entre encaixes bons fica o de MENOR ajuste (uma abertura real de 75 s custa só 0,2/linha)
+const SWITCH = 2.5, OMIN = -20, OSTEP = 0.1, ON = 1401, OFFW = 0.003;
 function spansOf(g) { return g.map(r => ({ a: r[0], b: r[0] + r[1] })).sort((x, y) => x.a - y.a); }
 function lineCost(S, x) {
   let lo = 0, hi = S.length - 1; while (lo < hi) { const md = (lo + hi) >> 1; if (S[md].a < x) lo = md + 1; else hi = md; }
@@ -71,11 +73,12 @@ function lineCost(S, x) {
 }
 function alignDP(L, S) {
   const n = L.length; let dp = new Float64Array(ON); const back = [];
-  for (let o = 0; o < ON; o++) dp[o] = lineCost(S, L[0] + OMIN + o * OSTEP).c;
+  const oc = o => OFFW * Math.abs(OMIN + o * OSTEP);
+  for (let o = 0; o < ON; o++) dp[o] = lineCost(S, L[0] + OMIN + o * OSTEP).c + oc(o);
   for (let i = 1; i < n; i++) {
     let bi = 0; for (let o = 1; o < ON; o++) if (dp[o] < dp[bi]) bi = o;
     const nd = new Float64Array(ON), bk = new Int16Array(ON);
-    for (let o = 0; o < ON; o++) { const stay = dp[o], sw = dp[bi] + SWITCH; nd[o] = Math.min(stay, sw) + lineCost(S, L[i] + OMIN + o * OSTEP).c; bk[o] = stay <= sw ? o : bi; }
+    for (let o = 0; o < ON; o++) { const stay = dp[o], sw = dp[bi] + SWITCH; nd[o] = Math.min(stay, sw) + lineCost(S, L[i] + OMIN + o * OSTEP).c + oc(o); bk[o] = stay <= sw ? o : bi; }
     back.push(bk); dp = nd;
   }
   let o = 0; for (let k = 1; k < ON; k++) if (dp[k] < dp[o]) o = k;
@@ -141,17 +144,23 @@ if (statsOnly) { // node tools/match-lyrics.mjs --stats → recalcula a dificuld
 }
 const fi = process.argv.indexOf('--from'), FROM = fi > 0 ? JSON.parse(readFileSync(process.argv[fi + 1], 'utf8').match(/const SONG_CATALOG=(\[[\s\S]*\]);/)[1]) : [];
 if (process.argv.includes('--realign')) { // node tools/match-lyrics.mjs --realign → refaz o ajuste (alignDP) e fica com o melhor
+  const oi = process.argv.indexOf('--only'), only = oi > 0 ? process.argv[oi + 1].toLowerCase() : ''; // --only "nome": só essa música
   for (const s of cat) {
-    if (!s.lrc) continue;
+    if (!s.lrc || (only && !s.title.toLowerCase().includes(only))) continue;
     const j = await getLrc(s.lrc.id); if (!j) { console.log('✕ sem resposta:', s.title); continue; }
     const L = lrcTimes(j.syncedLyrics), S = spansOf(s.g);
     // candidatos: o ajuste atual, o de um catálogo antigo (--from arquivo.js) e o novo (alignDP) — fica o de melhor nota
     const cands = [{ k: 'atual', segs: s.lrc.segs }, { k: 'novo', segs: alignDP(L, S) }];
     const old = FROM.find(x => x.vid === s.vid && x.lrc && x.lrc.id === s.lrc.id); if (old) cands.push({ k: 'antigo', segs: old.lrc.segs });
-    for (const c of cands) c.sc = syncScore(L, c.segs, S);
-    const best = cands.reduce((a, b) => b.sc > a.sc + 0.005 ? b : a);
+    // nota final = sincronia − 0,0015 × ajuste mediano (s): empate de encaixe → o de menor deslocamento (refrão periódico)
+    const medOff = sg => { const v = sg.map(x => Math.abs(x[1])).sort((a, b) => a - b); return v[v.length >> 1] || 0; };
+    // começo pulado: falas CANTADAS da legenda (≥ 5 palavras) antes da 1ª frase da letra = o encaixe pulou o início da música
+    //  (refrão periódico deslocado um ciclo). Abertura falada do clipe tem poucas falas curtas e quase não pesa. −0,04 por fala.
+    const missed = sg => { const t0 = L[0] + sg[0][1]; return s.g.filter(r => r[0] < t0 - 1 && r[2] >= 5).length; };
+    for (const c of cands) { c.sc = syncScore(L, c.segs, S); c.miss = missed(c.segs); c.fsc = c.sc - 0.0015 * medOff(c.segs) - 0.04 * c.miss; }
+    const best = cands.reduce((a, b) => b.fsc > a.fsc + 0.005 ? b : a);
     s.lrc.segs = best.segs; s.lrc.m = +best.sc.toFixed(2);
-    console.log(`${cands.map(c => c.k + ' ' + Math.round(c.sc * 100) + '%').join(' · ')} → ${best.k} · ${s.title}`);
+    console.log(`${cands.map(c => c.k + ' ' + Math.round(c.sc * 100) + '% (ajuste ~' + medOff(c.segs).toFixed(0) + ' s, ' + c.miss + ' falas antes)').join(' · ')} → ${best.k} · ${s.title}`);
     await sleep(400);
   }
   writeFileSync(OUT, head + `const SONG_CATALOG=[\n${cat.map(x => JSON.stringify(x)).join(',\n')}\n];\n`);

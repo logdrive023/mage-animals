@@ -420,6 +420,7 @@ const Rhythm={
   const tr=this.track;if(!tr||!G)return;
   this.mix(dt); // 🔊 volume da faixa segue a digitação
   songSideUpdate(); // 🎵 painel da música (4×/s)
+  songSkipSync(); // ⏭ botão "Pular frase" aparece com 2+ frases acumuladas
   if(tr.src==='yt'&&this.yt&&this.playing&&!this.paused){
    const now=performance.now();this.t+=(now-this.rt)/1000;this.rt=now;
    // 📱 o tempo do player chega aos saltos (no iPhone ~1×/s): só corrige o relógio quando chega um valor NOVO — reler o
@@ -469,6 +470,14 @@ const Rhythm={
   if(j==='perfect'){const tp=staffTip(1);addRing(tp.x,tp.y,4,40,.3,'#ffe9a8')}
  },
  missNote(e){if(e&&e.songT!=null)this.stats.miss++;this.onTowerHit()},
+ /** ⏭ pular a frase da vez: só quando 2+ frases se acumularam na tela. Some sem tirar vida, mas conta como erro e zera o combo
+  *  (pular não pode valer mais que digitar) */
+ skipLine(){
+  if(!G||!G.song||!this.hasLyrics||state!=='play'||songLyricCount()<2)return;const e=this.currentLyric();if(!e)return;
+  this.stats.miss++;G.combo=0;if(typeof arcBreak==='function')arcBreak();if(G.target===e)G.target=null;
+  burst(e.x,e.y,'#c9a6ff',14,160);addRing(e.x,e.y,e.r,e.r*2,.35,'#c9a6ff');floatTxt(e.x,e.y-e.r-24,t('song.skipped'),'#c6cde8',15);
+  releaseEnemy(e);snd(420,.08,'triangle',.03,260);songSkipSync(true);songSideUpdate(true);
+ },
  /** 🎤 a frase da vez = a mais antiga ainda na tela (ordem cantada). Só ela recebe as teclas; as seguintes esperam apagadas. */
  currentLyric(){let best=null;if(!G)return null;for(let i=0;i<G.enemies.length;i++){const e=G.enemies[i];if(e.lyric&&(!best||e.lyric.t<best.lyric.t))best=e}return best},
  pause(){
@@ -482,6 +491,7 @@ const Rhythm={
   else if(this.yt){this.rt=performance.now();try{this.yt.playVideo()}catch(e){}}
  },
  stop(){
+  const sb=document.getElementById('songSkip');if(sb){sb.hidden=true;_skipN=-1}
   drumStop();if(this.yt){try{this.yt.destroy()}catch(e){}this.yt=null}
   this.track=null;this.playing=false;this.paused=false;songDock(false);if(typeof songSideShow==='function')songSideShow(false);
   if(typeof musicMix==='function')musicMix();if(typeof sfxApply==='function')sfxApply(); // efeitos voltam ao volume normal
@@ -540,6 +550,19 @@ const Rhythm={
  }
 };
 
+/** ⏭ botão "Pular frase" sobre o jogo: aparece só com 2+ frases da letra na tela (acumulou) e mostra quantas são; some ao
+ *  voltar a 1. Atualiza 4×/s e só mexe no DOM quando muda. Atalho: Tab (main.js). */
+const songLyricCount=()=>{let n=0;if(G)for(let i=0;i<G.enemies.length;i++)if(G.enemies[i].lyric)n++;return n};
+let _skipN=-1,_skipT=0;
+function songSkipSync(force){
+ const now=performance.now();if(!force&&now-_skipT<250)return;_skipT=now;
+ const on=!!(G&&G.song&&Rhythm.hasLyrics&&state==='play'),n=on?songLyricCount():0;let b=document.getElementById('songSkip');
+ if(n<2){if(b&&!b.hidden){b.hidden=true;_skipN=-1}return}
+ if(!b){const host=cv.parentElement||document.body;b=document.createElement('button');b.id='songSkip';b.className='songskip';b.type='button';
+  b.addEventListener('mousedown',e=>e.preventDefault());b.addEventListener('click',()=>Rhythm.skipLine());host.appendChild(b)}
+ if(n!==_skipN){_skipN=n;b.innerHTML=`⏭ ${t('song.skip')} <small>${t('song.skipN',{n})}</small>${DeviceManager.isTouch?'':'<kbd>Tab</kbd>'}`}
+ if(b.hidden){b.hidden=false;b.classList.remove('pop');void b.offsetWidth;b.classList.add('pop')}
+}
 /** 🎵 Perfeito no tempo da música: o mago ergue o cajado um instante (pose do triunfo, mais curta) e a gema solta faíscas douradas */
 function songPerfectFx(){
  if(typeof WIZ_ANIM==='undefined')return;WIZ_ANIM.triumph=Math.max(WIZ_ANIM.triumph,.55);castGlow=1;

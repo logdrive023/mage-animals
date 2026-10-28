@@ -55,20 +55,22 @@ for (const s of cat) {
     return prevIn ? 0 : d;
   });
   const ok = err.filter(d => d <= .5).length / L.length, far = err.filter(d => d > 2).length;
+  // início: a 1ª frase do jogo tem de nascer perto da 1ª fala do vídeo (deslocada um refrão inteiro = começa ~40 s tarde)
+  const start = +(L[0].t - S[0].a).toFixed(1);
   // jogabilidade (Normal): frase nasce em t-LEAD e chega na torre em max(fim, t + 0,75 s/palavra) + GRACE
   const life = L.map(x => ({ a: x.t - LEAD, b: Math.max(x.end, x.t + x.w * .75) + GRACE, c: x.c }));
   let maxOn = 0; for (const x of life) { const n = life.filter(y => y.a <= x.a && y.b > x.a).length; if (n > maxOn) maxOn = n; }
   const wpm = life.map(x => x.c / 5 / ((x.b - x.a) / 60));
   // falas seguidas muito juntas: menos de 1,2 s entre o início de uma e o da próxima
   const tight = L.filter((x, k) => L[k + 1] && L[k + 1].t - x.t < 1.2).length;
-  rows.push({ title: s.title, lv: s.lv, n: L.length, ok: Math.round(ok * 100), med: +pct(err, .5).toFixed(2), p90: +pct(err, .9).toFixed(2), far, maxOn, wpmP90: Math.round(pct(wpm, .9)), wpmMax: Math.round(Math.max(...wpm)), tight, inv: L.inv });
+  rows.push({ title: s.title, lv: s.lv, n: L.length, ok: Math.round(ok * 100), med: +pct(err, .5).toFixed(2), p90: +pct(err, .9).toFixed(2), far, maxOn, wpmP90: Math.round(pct(wpm, .9)), wpmMax: Math.round(Math.max(...wpm)), tight, inv: L.inv, start });
   await sleep(400);
 }
-console.log('nível | % frases a ≤0,5 s | mediana s | p90 s | >2 s | máx. na tela | WPM p90/máx (Normal) | falas <1,2 s | fora de ordem | música');
+console.log('nível | % frases a ≤0,5 s | mediana s | p90 s | >2 s | máx. na tela | WPM p90/máx (Normal) | falas <1,2 s | fora de ordem | 1ª frase − 1ª fala | música');
 for (const r of rows) {
   if (r.err) { console.log(`  ✕  ${r.err} · ${r.title}`); continue; }
-  const flag = r.ok < 70 || r.p90 > 1.5 || r.far > 3 || r.inv ? '⚠️' : '✓ ';
-  console.log(`${flag} ${'●'.repeat(r.lv || 0).padEnd(3)} | ${String(r.ok).padStart(3)}% | ${r.med.toFixed(2)} | ${r.p90.toFixed(2)} | ${String(r.far).padStart(2)} | ${r.maxOn} | ${String(r.wpmP90).padStart(3)}/${String(r.wpmMax).padStart(3)} | ${String(r.tight).padStart(2)} | ${r.inv} | ${r.title}`);
+  const flag = r.ok < 70 || r.p90 > 1.5 || r.far > 3 || r.inv || Math.abs(r.start) > 8 ? '⚠️' : '✓ ';
+  console.log(`${flag} ${'●'.repeat(r.lv || 0).padEnd(3)} | ${String(r.ok).padStart(3)}% | ${r.med.toFixed(2)} | ${r.p90.toFixed(2)} | ${String(r.far).padStart(2)} | ${r.maxOn} | ${String(r.wpmP90).padStart(3)}/${String(r.wpmMax).padStart(3)} | ${String(r.tight).padStart(2)} | ${r.inv} | ${r.start}s | ${r.title}`);
 }
 const good = rows.filter(r => !r.err);
-console.log(`\nmédia: ${Math.round(good.reduce((a, r) => a + r.ok, 0) / Math.max(1, good.length))}% das frases a até 0,5 s da fala no vídeo · ${good.filter(r => r.ok < 70 || r.p90 > 1.5 || r.far > 3 || r.inv).length} com alerta`);
+console.log(`\nmédia: ${Math.round(good.reduce((a, r) => a + r.ok, 0) / Math.max(1, good.length))}% das frases a até 0,5 s da fala no vídeo · ${good.filter(r => r.ok < 70 || r.p90 > 1.5 || r.far > 3 || r.inv || Math.abs(r.start) > 8).length} com alerta`);

@@ -29,6 +29,7 @@ window.addEventListener('keydown',ev=>{
  if(k===' '){ev.preventDefault();if(G&&G.mode==='arcade'&&!(G.song&&Rhythm.hasLyrics))arcFreeze();return} // ❄️ Congelar · 🎤 com letra o ESPAÇO é só o espaço entre palavras
  if(k==='Enter'){ev.preventDefault();if(G&&G.mode==='arcade')arcBlast();return} // 💥 Explosão Arcana
  if(k==='Backspace'){ev.preventDefault();cancelTarget();return}
+ if(k==='Tab'){ev.preventDefault();if(G&&G.song)Rhythm.skipLine();return} // ⏭ música: pula a frase da vez (só com 2+ frases acumuladas)
  if(G&&G.duel&&G.duel.online&&k>='1'&&k<='4'){ev.preventDefault();Net.emote(+k-1);return} // emotes na luta online
  if(G&&G.runes&&k.length===1)return; // modo runas: as letras do teclado não lançam feitiço (desenha-se com o mouse/dedo)
  if(k.length===1&&/[a-zà-ÿç]/i.test(k)){ev.preventDefault();onLetter(k.toLowerCase())} // caractere cru: a comparação de acentos fica em isCharMatch()

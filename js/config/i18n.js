@@ -2345,3 +2345,5 @@ i18nExtend({'pt-BR':{song:{cat:{hint:'Tocam na hora, com a letra de verdade sinc
 i18nExtend({'pt-BR':{song:{lv:{1:'Fácil',2:'Médio',3:'Difícil',tip:'Nível pelo tamanho das frases cantadas e pelo tempo que cada uma dura'}}},
  en:{song:{lv:{1:'Easy',2:'Medium',3:'Hard',tip:'Level by the length of the sung lines and how long each one lasts'}}},
  es:{song:{lv:{1:'Fácil',2:'Medio',3:'Difícil',tip:'Nivel por el largo de las frases cantadas y lo que dura cada una'}}}});
+// ⏭ Ritmo do Bardo: pular a frase da vez quando 2+ se acumulam
+i18nExtend({'pt-BR':{song:{skip:'Pular frase',skipN:'{n} na fila',skipped:'Pulada'}},en:{song:{skip:'Skip line',skipN:'{n} queued',skipped:'Skipped'}},es:{song:{skip:'Saltar frase',skipN:'{n} en fila',skipped:'Saltada'}}});
