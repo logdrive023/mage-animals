@@ -26,9 +26,9 @@ const SONG_DRUMS=[
 //  saem do vocabulário do jogo, no idioma e na dificuldade do jogador, sorteadas a cada partida.
 const SONG_CAT_TAGS=['pop','rock','latino','brasil','classic','eletro'];
 const SONG_CAT_TIERS={easy:['e'],normal:['s','m'],full:['m','m','l']};
-let _songCat=null,songCatTag='';
+let _songCat=null,songCatTag='',songCatLv=0;
 function songCatalog(){
- if(!_songCat)_songCat=(typeof SONG_CATALOG!=='undefined'?SONG_CATALOG:[]).map(x=>({id:x.id,src:'yt',vid:x.vid,title:x.title,tag:x.tag,lang:x.lang,lrc:x.lrc||null,cat:true,g:x.g,bpm:100,chart:[],lines:[]}));
+ if(!_songCat)_songCat=(typeof SONG_CATALOG!=='undefined'?SONG_CATALOG:[]).map(x=>({id:x.id,src:'yt',vid:x.vid,title:x.title,tag:x.tag,lang:x.lang,lrc:x.lrc||null,lv:x.lv||2,cat:true,g:x.g,bpm:100,chart:[],lines:[]}));
  return _songCat;
 }
 /** frases do catálogo → linhas {t,end,text}: 1 palavra do jogo a cada 3 cantadas (1 a 4); o refrão repete as palavras da 1ª vez */
@@ -74,6 +74,7 @@ async function songCatPrefetch(){
   await new Promise(z=>setTimeout(z,1500))}}finally{_lrcPre=false}
 }
 function songCatFilter(tag){songCatTag=songCatTag===tag?'':tag;renderModal();snd(660,.05,'triangle',.03)}
+function songCatLvFilter(l){songCatLv=songCatLv===l?0:l;renderModal();snd(520+l*120,.05,'triangle',.03)}
 
 /** id de 11 caracteres a partir de um link do YouTube (watch, youtu.be, embed, shorts) ou do próprio id */
 function ytIdOf(s){
@@ -461,7 +462,9 @@ const Rhythm={
  },
  /** HUD da música (canvas): título, barra de progresso com o tempo, WPM/precisão ao vivo e o último julgamento */
  drawHud(c){
-  const tr=this.track;if(!tr||!G||!G.song)return;const T0=this.now(),k=Math.min(1,T0/Math.max(1,this.dur)),x=192,w=188,y=14; // entre o placar (esq.) e a onda/vidas (dir.) do HUD
+  const tr=this.track;if(!tr||!G||!G.song)return;const T0=this.now(),k=Math.min(1,T0/Math.max(1,this.dur)),y=14; // y-2 = 12: o topo das caixas do HUD
+  // 📐 encaixada no vão entre o placar (esq., até x 164) e a caixa da onda/vidas (dir., largura pelo nº de vidas — ui.js drawHUDLayer)
+  const gapL=172,gapR=W-12-(90+G.ch.lives*25)-8,x=gapL+10,w=Math.max(120,gapR-gapL-20);
   // ⭕ anel de aproximação em cada nota: fecha sobre o inimigo exatamente no tempo dela (fica dourado na janela do Perfeito)
   c.save();c.lineWidth=2;
   for(let i=0;i<G.enemies.length;i++){const e=G.enemies[i];if(e.songT==null)continue;
@@ -476,18 +479,19 @@ const Rhythm={
   // 📱 celular (iPhone/Android): o placar é HTML (#mhud) e maior → a caixa da música desce para logo abaixo dele, centrada e
   //  ampliada (o canvas encolhe ~0,6× no celular; sem isso as letras ficam minúsculas e a caixa some atrás da onda/vidas)
   const mob=songHudMob();c.save();if(mob){c.translate(TX,mob.y);c.scale(mob.s,mob.s);c.translate(-x-w/2,-y+8)}
-  c.fillStyle='rgba(6,8,26,.78)';c.beginPath();c.roundRect(x-10,y-8,w+20,44,12);c.fill();
-  c.strokeStyle='rgba(233,216,188,.55)';c.lineWidth=1.2;c.stroke();
-  c.fillStyle='rgba(255,255,255,.1)';c.fillRect(x,y+18,w,5);c.fillStyle=G.col;c.fillRect(x,y+18,w*k,5);
-  c.fillStyle='#fff';c.beginPath();c.arc(x+w*k,y+20.5,3.5,0,6.283);c.fill();
+  // mesma moldura dourada e mesma altura (56) das caixas do placar e da onda: as três ficam alinhadas no topo
+  if(mob){c.fillStyle='rgba(6,8,26,.78)';c.beginPath();c.roundRect(x-10,y-2,w+20,56,12);c.fill();c.strokeStyle='rgba(233,216,188,.55)';c.lineWidth=1.2;c.stroke()}
+  else hudBox(c,x-10,y-2,Math.round(w+20),56);
   const mm=s=>Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0'),clock=mm(T0)+' / '+mm(this.dur);
   c.font='900 11px Nunito';const cw=c.measureText(clock).width; // 📐 o título cabe no espaço que sobra ao lado do relógio (não encosta mais nele)
-  const title=tr.src==='drum'?t(tr.title):tr.title||'';c.textAlign='left';c.fillStyle='#e9d8bc';c.fillText(fitTxt(c,'🎵 '+title,w-cw-10),x,y+8);
-  c.textAlign='right';c.fillStyle='#aab4dc';c.fillText(clock,x+w,y+8);
+  const title=tr.src==='drum'?t(tr.title):tr.title||'';c.textAlign='left';c.fillStyle='#e9d8bc';c.fillText(fitTxt(c,'🎵 '+title,w-cw-10),x,y+14);
+  c.textAlign='right';c.fillStyle='#aab4dc';c.fillText(clock,x+w,y+14);
+  c.fillStyle='rgba(255,255,255,.1)';c.fillRect(x,y+22,w,5);c.fillStyle=G.col;c.fillRect(x,y+22,w*k,5);
+  c.fillStyle='#fff';c.beginPath();c.arc(x+w*k,y+24.5,3.5,0,6.283);c.fill();
   c.font='800 10px Nunito';c.textAlign='center';c.fillStyle='#c6cde8';
-  c.fillText(calcWpm()+' WPM · '+calcAcc()+'% · ✨'+this.stats.perfect+' 💫'+this.stats.great,x+w/2,y+33);
+  c.fillText(fitTxt(c,calcWpm()+' WPM · '+calcAcc()+'% · ✨'+this.stats.perfect+' 💫'+this.stats.great,w),x+w/2,y+44);
   const nx=this.hasLyrics?this.notes[this.ni]:null; // 🎤 próxima frase (prévia discreta sob o painel)
-  if(nx&&nx.text&&!songSideOn()){c.font='italic 700 10.5px Nunito';c.fillStyle='rgba(233,216,188,.6)';c.fillText(fitTxt(c,'▸ '+nx.text,w+16),x+w/2,y+50)} // com o painel da música aberto, a próxima frase fica lá
+  if(nx&&nx.text&&!songSideOn()){c.font='italic 700 10.5px Nunito';c.fillStyle='rgba(233,216,188,.6)';c.fillText(fitTxt(c,'▸ '+nx.text,w+16),x+w/2,y+68)} // com o painel da música aberto, a próxima frase fica lá
   c.restore();c.save();c.textAlign='center';
   if(this.stalled){c.font='900 15px Nunito';c.fillStyle='rgba(6,8,26,.85)';c.beginPath();c.roundRect(TX-170,H/2-60,340,40,12);c.fill();c.strokeStyle='rgba(233,216,188,.6)';c.lineWidth=1.2;c.stroke();
    c.fillStyle='#ffe9a8';c.fillText('📺 '+t('song.stall'),TX,H/2-34);
@@ -603,11 +607,13 @@ function tabSongs(){
 function songCatHTML(hist){
  const cat=songCatalog();if(!cat.length)return'';
  const best={};for(const h of hist){const b=best[h.id]||(best[h.id]={pct:0,clear:false});b.pct=Math.max(b.pct,h.pct|0);if(h.clear)b.clear=true}
- const tags=SONG_CAT_TAGS.filter(g=>cat.some(x=>x.tag===g)),list=songCatTag?cat.filter(x=>x.tag===songCatTag):cat;
- const card=tr=>{const b=best[tr.id],res=b?(b.clear?'<em class="catres win">🏆</em>':`<em class="catres">${b.pct}%</em>`):'';
-  return`<div class="songcard yt cat"><span class="songic" aria-hidden="true">⚡</span><div class="songtx"><b>${esc(tr.title)}</b><small>🎤 ${t('song.lyricsN',{n:tr.g.length})} · ${t('song.tag.'+tr.tag)}</small></div>${res}<button class="btn songplay" onclick="Rhythm.pick('${tr.id}')">▶ ${t('song.play')}</button></div>`};
+ // 🎚️ nível pelas frases cantadas (lv do catálogo: letras por segundo que as frases exigem) — lista do Fácil ao Difícil
+ const tags=SONG_CAT_TAGS.filter(g=>cat.some(x=>x.tag===g)),list=cat.filter(x=>(!songCatTag||x.tag===songCatTag)&&(!songCatLv||x.lv===songCatLv)).sort((a,b)=>(a.lv||2)-(b.lv||2));
+ const card=tr=>{const b=best[tr.id],res=b?(b.clear?'<em class="catres win">🏆</em>':`<em class="catres">${b.pct}%</em>`):'',lv=tr.lv||2;
+  return`<div class="songcard yt cat"><span class="songic" aria-hidden="true">⚡</span><div class="songtx"><b>${esc(tr.title)}</b><small><i class="catlv l${lv}" title="${esc(t('song.lv.tip'))}">${'●'.repeat(lv)}${'○'.repeat(3-lv)} ${t('song.lv.'+lv)}</i> · ${t('song.tag.'+tr.tag)}</small></div>${res}<button class="btn songplay" onclick="Rhythm.pick('${tr.id}')">▶ ${t('song.play')}</button></div>`};
  return`<h4 class="songh">📚 ${t('song.cat.title')} <small>${cat.length}</small></h4><p class="songhint">${t('song.cat.hint')}</p>
  <div class="songtags"><button class="${songCatTag?'':'on'}" onclick="songCatFilter('')">${t('song.cat.all')}</button>${tags.map(g=>`<button class="${songCatTag===g?'on':''}" onclick="songCatFilter('${g}')">${t('song.tag.'+g)}</button>`).join('')}</div>
+ <div class="songtags lv">${[1,2,3].map(l=>`<button class="l${l}${songCatLv===l?' on':''}" onclick="songCatLvFilter(${l})">${'●'.repeat(l)} ${t('song.lv.'+l)} <small>${cat.filter(x=>(x.lv||2)===l).length}</small></button>`).join('')}</div>
  <div class="songlist songcat">${list.map(card).join('')}</div>`;
 }
 function songSave(){

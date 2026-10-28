@@ -2341,3 +2341,7 @@ i18nExtend({'pt-BR':{song:{cat:{hint:'Tocam na hora. Com o servidor de legendas 
 i18nExtend({'pt-BR':{song:{cat:{hint:'Tocam na hora, com a letra de verdade sincronizada com o vídeo. Se a letra não carregar, você digita palavras do jogo no tempo exato do canto.'}}},
  en:{song:{cat:{hint:'Start instantly, with the real lyrics synced to the video. If the lyrics fail to load, you type game words on the exact beat of the singing.'}}},
  es:{song:{cat:{hint:'Empiezan al instante, con la letra real sincronizada con el video. Si la letra no carga, escribes palabras del juego en el tiempo exacto del canto.'}}}});
+// 🎚️ Músicas prontas: nível pelas frases cantadas (quantas letras por segundo cada frase exige)
+i18nExtend({'pt-BR':{song:{lv:{1:'Fácil',2:'Médio',3:'Difícil',tip:'Nível pelo tamanho das frases cantadas e pelo tempo que cada uma dura'}}},
+ en:{song:{lv:{1:'Easy',2:'Medium',3:'Hard',tip:'Level by the length of the sung lines and how long each one lasts'}}},
+ es:{song:{lv:{1:'Fácil',2:'Medio',3:'Difícil',tip:'Nivel por el largo de las frases cantadas y lo que dura cada una'}}}});

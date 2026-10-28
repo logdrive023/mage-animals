@@ -7,6 +7,7 @@
 //
 //   node tools/match-lyrics.mjs          → só as músicas sem letra ligada
 //   node tools/match-lyrics.mjs --all    → refaz todas
+//   node tools/match-lyrics.mjs --stats  → só recalcula a dificuldade (lv 1 Fácil · 2 Médio · 3 Difícil, cps, wpl)
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -59,7 +60,35 @@ function parts(title) {
   return { artist: a.split(/,|&| x /i)[0].trim(), track };
 }
 
-const all = process.argv.includes('--all');
+/** 🎚️ dificuldade pelas FRASES CANTADAS: para cada linha, letras ÷ (tempo até a próxima linha, máx. 8 s, + 2,5 s de folga)
+ *  = letras por segundo que a frase exige; a música vale a média entre a mediana e o 80º percentil (os trechos rápidos pesam).
+ *  Também guarda a média de palavras por linha. Só números: o texto é descartado aqui. */
+function difficulty(synced) {
+  const L = String(synced || '').split('\n').map(l => { const m = l.match(/^\[(\d+):(\d+(?:\.\d+)?)\]\s*(.*)$/); return m && /\p{L}/u.test(m[3]) ? { t: +m[1] * 60 + +m[2], c: (m[3].match(/\p{L}/gu) || []).length, w: m[3].split(/\s+/).filter(x => /\p{L}/u.test(x)).length } : null; }).filter(Boolean);
+  const need = L.map((x, i) => x.c / (Math.min(8, L[i + 1] ? L[i + 1].t - x.t : 4) + 2.5)).sort((a, b) => a - b);
+  const q = k => need[Math.min(need.length - 1, Math.floor(need.length * k))];
+  return { cps: +((q(.5) + q(.8)) / 2).toFixed(2), wpl: +(L.reduce((a, x) => a + x.w, 0) / Math.max(1, L.length)).toFixed(1) };
+}
+// limites dos níveis (letras/s): abaixo de LV[0] = Fácil · até LV[1] = Médio · acima = Difícil
+const LV = [4.385, 5.1]; // terços das 40 músicas do catálogo inicial (13 · 13 · 14)
+const lvOf = cps => cps < LV[0] ? 1 : cps < LV[1] ? 2 : 3;
+async function getLrc(id) {
+  for (let k = 0; k < 12; k++) { const r = await fetch(`https://lrclib.net/api/get/${id}`); if (r.ok) return r.json(); if (r.status < 500) return null; await sleep(2000); }
+  return null;
+}
+
+const all = process.argv.includes('--all'), statsOnly = process.argv.includes('--stats');
+if (statsOnly) { // node tools/match-lyrics.mjs --stats → recalcula a dificuldade de todas as músicas já ligadas
+  for (const s of cat) {
+    if (!s.lrc || (s.cps != null && !all)) continue; // --stats --all: recalcula também as que já têm
+    const j = await getLrc(s.lrc.id); if (!j) { console.log('✕ sem resposta:', s.title); continue; }
+    const d = difficulty(j.syncedLyrics); s.lv = lvOf(d.cps); s.cps = d.cps; s.wpl = d.wpl;
+    console.log(`${'·'.repeat(s.lv)} ${s.title} · ${d.cps} letras/s · ${d.wpl} palavras/linha`);
+    await sleep(500);
+  }
+  writeFileSync(OUT, head + `const SONG_CATALOG=[\n${cat.map(x => JSON.stringify(x)).join(',\n')}\n];\n`);
+  process.exit(0);
+}
 for (const s of cat) {
   if (s.lrc && !all) { console.log('= já ligada:', s.title); continue; }
   const { artist, track } = parts(s.title);
@@ -76,7 +105,8 @@ for (const s of cat) {
     const a = align(L, G);
     if (!best || a.m > best.m) best = { id: c.id, n: L.length, ...a };
   }
-  if (best && best.m >= MIN_M) { s.lrc = { id: best.id, segs: best.segs, m: best.m }; console.log(`✓ ${s.title} · LRCLIB ${best.id} · ${best.n} linhas · ${Math.round(best.m * 100)}% batendo · ajuste ${best.global}s · ${best.segs.length} trecho(s)`); }
+  if (best && best.m >= MIN_M) { s.lrc = { id: best.id, segs: best.segs, m: best.m };
+    const d = difficulty((res.find(x => x.id === best.id) || {}).syncedLyrics); s.lv = lvOf(d.cps); s.cps = d.cps; s.wpl = d.wpl; console.log(`✓ ${s.title} · LRCLIB ${best.id} · ${best.n} linhas · ${Math.round(best.m * 100)}% batendo · ajuste ${best.global}s · ${best.segs.length} trecho(s)`); }
   else { delete s.lrc; console.log(`✕ ${s.title} · ${best ? 'melhor só ' + Math.round(best.m * 100) + '% batendo' : 'sem letra sincronizada'} (${artist} / ${track})`); }
   await sleep(700);
 }

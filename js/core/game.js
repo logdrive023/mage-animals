@@ -370,6 +370,8 @@ function updateFx(dt){
 function update(dt){
  if(G.blessing)return; // 🎴 mundo parado enquanto escolhe a bênção
  if(G.song&&Rhythm.stallCheck())return; // 📺 anúncio/carregamento no vídeo: a partida espera a música voltar
+ // 🎵 na música não há pausa no golpe nem câmera lenta: o vídeo não para, e o mundo parado dava um tranco a cada frase destruída
+ if(G.song){G.hitStop=0;G.slowmo=0}
  if(G.hitStop>0){G.hitStop-=dt;castGlow=Math.max(castGlow,.6);return} // ⏸️ pausa no golpe: tudo congela por alguns centésimos
  if(G.slowmo>0){G.slowmo-=dt;dt*=ARC.CLUTCH_SLOW} // 😮‍💨 câmera lenta curtinha depois de um "por um triz"
  G.time+=dt;G.waveTime+=dt;G.banner=Math.max(0,G.banner-dt);G.col=spellColor(G.ch);musicPerf(dt);

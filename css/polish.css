@@ -455,4 +455,8 @@ body:not(.is-mobile) .adv-card .adv-check{top:50%;right:8px;transform:translateY
 .catres{font:900 12px Nunito,sans-serif;font-style:normal;color:var(--txt-dim);padding:3px 8px;border-radius:999px;background:rgba(255,255,255,.06)}
 .catres.win{color:#ffe9a8;background:rgba(255,215,120,.14)}.sslyr .ssfake{margin:0 0 8px;padding:6px 10px;border-radius:10px;font:800 11.5px/1.35 Nunito,sans-serif;color:#ffe9a8;background:rgba(255,215,120,.1);border:1px dashed rgba(255,215,120,.35)}/* 🎤 karaokê: a frase da vez se preenche de dourado no tempo do canto */
 .ssl.cur .kar{--k:0%;background:linear-gradient(90deg,#ffd98a var(--k),#fff var(--k));-webkit-background-clip:text;background-clip:text;color:transparent;transition:--k .25s linear}
-@property --k{syntax:'<percentage>';inherits:false;initial-value:0%}
+@property --k{syntax:'<percentage>';inherits:false;initial-value:0%}/* 🎚️ nível das Músicas prontas: verde · âmbar · vermelho */
+.catlv{font-style:normal;font-weight:900;letter-spacing:.5px}
+.catlv.l1,.songtags.lv .l1{color:#7dffbd}.catlv.l2,.songtags.lv .l2{color:#ffd98a}.catlv.l3,.songtags.lv .l3{color:#ff8a9a}
+.songtags.lv button small{opacity:.7;font-size:10.5px;margin-left:2px}
+.songtags.lv button.on{color:var(--ink-gold)}
