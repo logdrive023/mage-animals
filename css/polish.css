@@ -459,4 +459,9 @@ body:not(.is-mobile) .adv-card .adv-check{top:50%;right:8px;transform:translateY
 .catlv{font-style:normal;font-weight:900;letter-spacing:.5px}
 .catlv.l1,.songtags.lv .l1{color:#7dffbd}.catlv.l2,.songtags.lv .l2{color:#ffd98a}.catlv.l3,.songtags.lv .l3{color:#ff8a9a}
 .songtags.lv button small{opacity:.7;font-size:10.5px;margin-left:2px}
-.songtags.lv button.on{color:var(--ink-gold)}
+.songtags.lv button.on{color:var(--ink-gold)}/* 🎚️ Músicas prontas: título fixo de cada nível na lista + faixa colorida do nível na borda esquerda do cartão */
+.songcat .catsec{position:sticky;top:-1px;z-index:2;display:flex;align-items:center;gap:8px;margin:6px 0 0;padding:7px 12px;border-radius:10px;font:900 12.5px Nunito,sans-serif;letter-spacing:.4px;text-transform:uppercase;background:linear-gradient(90deg,rgba(14,12,36,.97),rgba(14,12,36,.92));border:1px solid currentColor;box-shadow:0 4px 10px rgba(0,0,0,.35)}
+.songcat .catsec:first-child{margin-top:0}
+.songcat .catsec small{margin-left:auto;font-size:11px;opacity:.75}
+.songcat .catsec.l1{color:#7dffbd}.songcat .catsec.l2{color:#ffd98a}.songcat .catsec.l3{color:#ff8a9a}
+.songcard.cat.lv1{box-shadow:inset 4px 0 0 #7dffbd,var(--shadow-deep)}.songcard.cat.lv2{box-shadow:inset 4px 0 0 #ffd98a,var(--shadow-deep)}.songcard.cat.lv3{box-shadow:inset 4px 0 0 #ff8a9a,var(--shadow-deep)}

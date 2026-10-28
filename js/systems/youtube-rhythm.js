@@ -43,6 +43,14 @@ function songCatalogLines(tr){
  }
  return out;
 }
+/** linhas de um LRC em ordem de tempo: a linha com vários tempos ("[00:30.00][01:20.00] refrão", refrão escrito 1 vez)
+ *  vira uma linha por tempo. Só as que têm letra. Mesma regra de tools/match-lyrics.mjs (o índice dos trechos depende dela). */
+function lrcRows(s){
+ const out=[];
+ for(const raw of String(s||'').split('\n')){const h=raw.match(/^((?:\[\d+:\d+(?:\.\d+)?\])+)\s*(.*)$/);if(!h||!/\p{L}/u.test(h[2]))continue;
+  for(const m of h[1].matchAll(/\[(\d+):(\d+(?:\.\d+)?)\]/g))out.push({t:+m[1]*60+ +m[2],text:h[2]})}
+ return out.sort((a,b)=>a.t-b.t);
+}
 /** 🎤 letra sincronizada da música pronta: o navegador do jogador baixa do LRCLIB (lrclib.net, CORS aberto, sem chave) e aplica
  *  o ajuste de sincronia com o VÍDEO calculado por tools/match-lyrics.mjs (lrc.segs = [[a partir da linha i, ajuste s]]).
  *  As linhas contam igual ao script: só as que têm alguma letra, na ordem do arquivo. Devolve [] se falhar (máx. 9 s).
@@ -54,14 +62,19 @@ async function songLrcLines(tr){
   if(api)try{const r=await fetch(api+'/?lrc='+tr.lrc.id,{signal:sig});if(r.ok){const x=await r.json();if(x&&x.ok&&x.syncedLyrics)j=x}}catch(e){if(sig&&sig.aborted)return[]}
   for(let k=0;!j&&k<4;k++){const r=await fetch('https://lrclib.net/api/get/'+tr.lrc.id,{signal:sig});if(r.ok){j=await r.json();break}if(r.status<500)break;await new Promise(z=>setTimeout(z,1200))}
   if(!j)return[];const out=[];let i=0,si=0;const S=tr.lrc.segs;
-  for(const raw of String(j.syncedLyrics||'').split('\n')){const m=raw.match(/^\[(\d+):(\d+(?:\.\d+)?)\]\s*(.*)$/);if(!m||!/\p{L}/u.test(m[3]))continue;
-   while(si+1<S.length&&S[si+1][0]<=i)si++;const text=cueText(m[3]);if(text)out.push({t:+(+m[1]*60+ +m[2]+S[si][1]).toFixed(2),text});i++}
-  return out.sort((a,b)=>a.t-b.t);
+  let p0=-1,p1=-1; // ordem e respiro: a frase nunca fica antes da anterior nem a menos de 70% do intervalo original (0,35–1,2 s)
+  for(const x of lrcRows(j.syncedLyrics)){
+   while(si+1<S.length&&S[si+1][0]<=i)si++;let t1=x.t+S[si][1];
+   if(p0>=0)t1=Math.max(t1,p1+Math.max(.35,Math.min((x.t-p0)*.7,1.2)));p0=x.t;p1=t1;
+   const text=cueText(x.text);if(text)out.push({t:+t1.toFixed(2),text});i++}
+  return out;
  }catch(e){return[]}finally{clearTimeout(timer)}
 }
 /** letra guardada neste navegador (30 dias; muda se o catálogo trocar a letra ligada) · máx. 40 músicas guardadas */
-function catLyrGet(tr){const sv=store.get('catLyr',{})||{},c=sv[tr.vid],lid=tr.lrc?tr.lrc.id:0;return c&&c.v===SONG_CAP_V&&(c.id|0)===lid&&Date.now()-c.at<30*864e5&&c.lines&&c.lines.length?c.lines:null}
-function catLyrPut(tr,lines){const sv=store.get('catLyr',{})||{};sv[tr.vid]={v:SONG_CAP_V,id:tr.lrc?tr.lrc.id:0,at:Date.now(),lines};
+// CAT_LYR_V: sobe quando muda o jeito de montar a letra (ajustes do catálogo, ordem das linhas) — a letra guardada é refeita
+const CAT_LYR_V=2,catSegKey=tr=>tr.lrc?tr.lrc.segs.length+':'+tr.lrc.segs.reduce((a,s)=>a+s[0]*7+s[1],0).toFixed(2):'';
+function catLyrGet(tr){const sv=store.get('catLyr',{})||{},c=sv[tr.vid],lid=tr.lrc?tr.lrc.id:0;return c&&c.v===SONG_CAP_V&&c.cv===CAT_LYR_V&&c.sk===catSegKey(tr)&&(c.id|0)===lid&&Date.now()-c.at<30*864e5&&c.lines&&c.lines.length?c.lines:null}
+function catLyrPut(tr,lines){const sv=store.get('catLyr',{})||{};sv[tr.vid]={v:SONG_CAP_V,cv:CAT_LYR_V,sk:catSegKey(tr),id:tr.lrc?tr.lrc.id:0,at:Date.now(),lines};
  const ks=Object.keys(sv).sort((a,b)=>sv[b].at-sv[a].at);for(const k of ks.slice(40))delete sv[k];store.set('catLyr',sv)}
 /** ⏬ com a tela de músicas aberta, baixa em segundo plano as letras que faltam (na ordem da lista, uma a cada 1,5 s): ao
  *  tocar, a música já começa com a letra. Para ao fechar a tela, ao começar a jogar ou depois de 3 falhas seguidas. */
@@ -94,7 +107,9 @@ function parseSongChart(txt){
 }
 // 🎤 MODO FRASE (letra da música): cada frase cantada vira UM Asteroide do Bardo grande com a frase inteira.
 //  A letra é SEMPRE do jogador (colada como LRC "[mm:ss.xx] frase" ou marcada no editor ao vivo) — o jogo não baixa letras.
-const SONG_LINE_LEAD=.6,SONG_LINE_GRACE=2.6; // a frase aparece 0,6 s antes de ser cantada (antes 1,4 s: várias chegavam juntas)
+// a frase aparece junto com o canto (0,15 s antes; antes 0,6 s, mas o tick usava sem querer o SONG_LEAD de 3,4 s das notas de
+//  batida — a frase surgia muito antes de ser cantada e a seguinte já vinha junto)
+const SONG_LINE_LEAD=.15,SONG_LINE_GRACE=2.6;
 /** LRC → [{t,text}] (aceita várias marcas de tempo na mesma linha e ignora metadados como [ar:] [ti:]) */
 function parseLRC(txt){
  const out=[];
@@ -190,9 +205,9 @@ const lyricWords=s=>String(s||'').toLowerCase().normalize('NFC').split(/\s+/).ma
 // 🎚️ DIFICULDADE do modo frase (músicas rápidas): grace = segundos extras depois do fim da frase até o asteroide chegar
 //  na torre · key = só palavras-chave · perfect/great = janelas do julgamento (contadas a partir do fim da frase)
 const SONG_DIFF={
- easy:{grace:5,key:true,perfect:1.2,great:3},
- normal:{grace:4,key:false,perfect:.7,great:2.2},
- full:{grace:SONG_LINE_GRACE,key:false,perfect:.35,great:1.5}
+ easy:{grace:8,key:true,perfect:1.2,great:3}, // folgas maiores desde que a frase nasce junto com o canto (antes nascia ~3 s antes)
+ normal:{grace:6.5,key:false,perfect:.7,great:2.2},
+ full:{grace:4.5,key:false,perfect:.35,great:1.5}
 };
 const songDiff=()=>{const d=store.get('songDiff','normal');return SONG_DIFF[d]?d:'normal'};
 // palavras de função (artigos, pronomes, preposições, contrações) — no Fácil ficam de fora; a frase continua visível
@@ -207,9 +222,32 @@ function keyWords(words){
  const pool=cand.length?cand:words.map((w,i)=>({w,i}));
  return pool.slice().sort((a,b)=>b.w.length-a.w.length||a.i-b.i).slice(0,k).sort((a,b)=>a.i-b.i).map(o=>o.w);
 }
+// ⌨️ LETRA DIGITÁVEL: o jogador tem teclado latino. Coreano (hangul) vira a Romanização Revisada, sílaba por sílaba
+//  ("오빤 강남스타일" → "oppan gangnamseutail", como se canta); a consoante final passa para a sílaba seguinte quando ela
+//  começa por vogal (사람이 → sarami). Outras escritas (japonês, chinês, russo, árabe…): a frase vira palavras do jogo,
+//  no mesmo tempo e com o mesmo tanto de palavras (1 a cada 2 cantadas, de 1 a 4).
+const KO_I='g kk n d tt r m b pp s ss _ j jj ch k t p h'.split(' '),KO_V='a ae ya yae eo e yeo ye o wa wae oe yo u wo we wi yu eu ui i'.split(' ');
+const KO_F=',k,k,k,n,n,n,t,l,k,m,p,t,t,p,t,m,p,p,t,t,ng,t,t,k,t,p,t'.split(',');
+const KO_FV=',g,kk,ks,n,nj,nh,d,r,lg,lm,lb,ls,lt,lp,lh,m,b,bs,s,ss,ng,j,ch,k,t,p,h'.split(','); // final antes de vogal
+function romanizeKo(s){
+ let out='';
+ for(let i=0;i<s.length;i++){const c=s.charCodeAt(i)-0xac00;if(c<0||c>11171){out+=s[i];continue}
+  const ini=Math.floor(c/588),med=Math.floor(c%588/28),fin=c%28,nx=s.charCodeAt(i+1)-0xac00,nxVowel=nx>=0&&nx<=11171&&Math.floor(nx/588)===11;
+  out+=(ini===11?'':KO_I[ini])+KO_V[med]+(fin?(nxVowel?KO_FV[fin]:KO_F[fin]):'')}
+ return out;
+}
+const NON_LATIN=/[^\p{Script=Latin}\P{L}]/u;
+function typeableText(s,n){
+ s=String(s||'');if(/[가-힣]/.test(s))s=romanizeKo(s);
+ if(!NON_LATIN.test(s))return{text:s,game:false};
+ const k=Math.max(1,Math.min(4,Math.ceil((n||s.split(/\s+/).length)/2))),ws=[];
+ for(let i=0;i<k;i++){const L=POOL[i%2?'m':'s'];ws.push(L&&L.length?L[(Math.random()*L.length)|0]:'magia')}
+ return{text:ws.join(' '),game:true};
+}
 function linesToNotes(lines,dur){
- const out=[],seen=new Set(),D=SONG_DIFF[songDiff()];
- for(let i=0;i<lines.length;i++){const L=lines[i],all=lyricWords(L.text);if(!all.length||L.t>=dur)continue;
+ const out=[],seen=new Set(),D=SONG_DIFF[songDiff()],gw=new Map(); // gw: a mesma frase estrangeira ganha as mesmas palavras do jogo (o refrão continua refrão)
+ for(let i=0;i<lines.length;i++){const L0=lines[i];let ty=gw.get(L0.text);if(!ty){ty=typeableText(L0.text);gw.set(L0.text,ty)}
+  const L=ty.text===L0.text?L0:Object.assign({},L0,{text:ty.text}),all=lyricWords(L.text);if(!all.length||L.t>=dur)continue;
   const nxt=lines[i+1]?lines[i+1].t:Infinity,own=L.end?L.end:Math.min(nxt,L.t+4.5),key=all.join(' '); // legenda (.srt/.vtt) traz o próprio fim
   const nx=Math.max(L.t+.8,Math.min(own,nxt+.05)); // legendas "roladas" se sobrepõem: a frase acaba quando a próxima começa (ordem cantada, uma de cada vez)
   const words=D.key?keyWords(all):all;
@@ -394,7 +432,7 @@ const Rhythm={
   const b=Math.floor((T0-(tr.offset||0))/spb);
   if(b!==this.beat&&b>=0){this.beat=b;addRing(TX,TTOP-34,8,b%4===0?74:52,.32,b%4===0?'#ffe9a8':G.col);castGlow=Math.max(castGlow,b%4===0?.55:.3)}
   // nasce cada nota SONG_LEAD s antes do tempo dela
-  while(this.ni<this.notes.length&&this.notes[this.ni].t-SONG_LEAD<=T0){this.spawnNote(this.notes[this.ni],T0);this.ni++}
+  while(this.ni<this.notes.length&&this.notes[this.ni].t-(this.notes[this.ni].lead!=null?this.notes[this.ni].lead:SONG_LEAD)<=T0){this.spawnNote(this.notes[this.ni],T0);this.ni++} // 🎤 frase: lead próprio (SONG_LINE_LEAD)
   G.wave=1+Math.min(7,Math.floor(T0/Math.max(1,this.dur)*8)); // progresso da faixa vira a "onda" (vocabulário e XP)
   if((this.ended||T0>=this.dur)&&this.ni>=this.notes.length&&!G.enemies.length&&state==='play'){G.songClear=true;gameOver()}
  },
@@ -610,11 +648,12 @@ function songCatHTML(hist){
  // 🎚️ nível pelas frases cantadas (lv do catálogo: letras por segundo que as frases exigem) — lista do Fácil ao Difícil
  const tags=SONG_CAT_TAGS.filter(g=>cat.some(x=>x.tag===g)),list=cat.filter(x=>(!songCatTag||x.tag===songCatTag)&&(!songCatLv||x.lv===songCatLv)).sort((a,b)=>(a.lv||2)-(b.lv||2));
  const card=tr=>{const b=best[tr.id],res=b?(b.clear?'<em class="catres win">🏆</em>':`<em class="catres">${b.pct}%</em>`):'',lv=tr.lv||2;
-  return`<div class="songcard yt cat"><span class="songic" aria-hidden="true">⚡</span><div class="songtx"><b>${esc(tr.title)}</b><small><i class="catlv l${lv}" title="${esc(t('song.lv.tip'))}">${'●'.repeat(lv)}${'○'.repeat(3-lv)} ${t('song.lv.'+lv)}</i> · ${t('song.tag.'+tr.tag)}</small></div>${res}<button class="btn songplay" onclick="Rhythm.pick('${tr.id}')">▶ ${t('song.play')}</button></div>`};
+  return`<div class="songcard yt cat lv${lv}"><span class="songic" aria-hidden="true">⚡</span><div class="songtx"><b>${esc(tr.title)}</b><small><i class="catlv l${lv}" title="${esc(t('song.lv.tip'))}">${'●'.repeat(lv)}${'○'.repeat(3-lv)} ${t('song.lv.'+lv)}</i> · ${t('song.tag.'+tr.tag)}</small></div>${res}<button class="btn songplay" onclick="Rhythm.pick('${tr.id}')">▶ ${t('song.play')}</button></div>`};
  return`<h4 class="songh">📚 ${t('song.cat.title')} <small>${cat.length}</small></h4><p class="songhint">${t('song.cat.hint')}</p>
  <div class="songtags"><button class="${songCatTag?'':'on'}" onclick="songCatFilter('')">${t('song.cat.all')}</button>${tags.map(g=>`<button class="${songCatTag===g?'on':''}" onclick="songCatFilter('${g}')">${t('song.tag.'+g)}</button>`).join('')}</div>
  <div class="songtags lv">${[1,2,3].map(l=>`<button class="l${l}${songCatLv===l?' on':''}" onclick="songCatLvFilter(${l})">${'●'.repeat(l)} ${t('song.lv.'+l)} <small>${cat.filter(x=>(x.lv||2)===l).length}</small></button>`).join('')}</div>
- <div class="songlist songcat">${list.map(card).join('')}</div>`;
+ <div class="songlist songcat">${list.map((tr,i)=>{const lv=tr.lv||2,head=!i||(list[i-1].lv||2)!==lv; // 🎚️ título fixo a cada nível (gruda no topo ao rolar)
+  return(head?`<div class="catsec l${lv}"><span>${'●'.repeat(lv)}${'○'.repeat(3-lv)}</span><b>${t('song.lv.'+lv)}</b><small>${list.filter(x=>(x.lv||2)===lv).length}</small></div>`:'')+card(tr)}).join('')}</div>`;
 }
 function songSave(){
  const $v=id=>(document.getElementById(id)||{}).value||'';const vid=ytIdOf($v('sgUrl'));
