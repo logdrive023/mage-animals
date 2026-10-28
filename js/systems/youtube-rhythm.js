@@ -101,16 +101,34 @@ function phrasesFromTimedWords(words){
  return out.map((p,i)=>({t:p.t,end:Math.min(out[i+1]?out[i+1].t:p.last+PHR.tail+.6,p.last+PHR.tail+.6),text:p.text}));
 }
 const songCaptionsApi=()=>String(store.get('captionsApi','')||SONG_CAPTIONS_API).trim().replace(/\/+$/,'');
-/** busca as legendas do vídeo no Worker (máx. 8 s); devolve [{t,end,text}] limpas, ou [] se o vídeo não tiver/der erro */
-async function fetchCaptions(vid){
- const api=songCaptionsApi();if(!api)return[];
- const ctl=typeof AbortController!=='undefined'?new AbortController():null,timer=setTimeout(()=>ctl&&ctl.abort(),8000);
- try{const lang=String(typeof LANG!=='undefined'?LANG:'pt').slice(0,2);
-  const r=await fetch(api+'/?v='+encodeURIComponent(vid)+'&lang='+lang,{signal:ctl?ctl.signal:undefined});const j=await r.json();
-  if(!j||!j.ok||!Array.isArray(j.lines))return[];
-  if(Array.isArray(j.words)&&j.words.length)return tidyLines(phrasesFromTimedWords(j.words)); // legenda automática: frases montadas aqui pelas pausas do canto
-  return tidyLines(j.lines.map(x=>({t:+x.t,end:+x.end||undefined,text:cueText(x.text)})));
- }catch(e){return[]}finally{clearTimeout(timer)}
+// 🚦 semáforo das legendas: no máximo 1 pedido ao servidor por vez (o mesmo vídeo pedido 2× reaproveita o pedido em andamento)
+//  e, se o servidor disser "pausa" (o YouTube bloqueou), o jogo nem pergunta de novo até a pausa acabar (capCoolUntil, salvo).
+const SONG_CAP_TTL=7*864e5; // letras salvas valem 7 dias (por enquanto); depois busca de novo (e fica com a antiga se falhar)
+let _capQ=Promise.resolve(),_capWait={};
+const capCoolUntil=()=>+store.get('capCoolUntil',0)||0;
+/** busca as legendas do vídeo no Worker (máx. 8 s). Devolve {lines:[{t,end,text}], err:''|'cooldown'|'none'|'net', retryIn:s} */
+function fetchCaptions(vid){
+ if(_capWait[vid])return _capWait[vid];
+ const run=async()=>{
+  const api=songCaptionsApi();if(!api)return{lines:[],err:'net',retryIn:600};
+  const cool=capCoolUntil()-Date.now();if(cool>0)return{lines:[],err:'cooldown',retryIn:Math.ceil(cool/1000)};
+  const ctl=typeof AbortController!=='undefined'?new AbortController():null,timer=setTimeout(()=>ctl&&ctl.abort(),8000);
+  try{const lang=String(typeof LANG!=='undefined'?LANG:'pt').slice(0,2);
+   const r=await fetch(api+'/?v='+encodeURIComponent(vid)+'&lang='+lang,{signal:ctl?ctl.signal:undefined});const j=await r.json();
+   if(j&&(j.error==='cooldown'||j.error==='blocked')){const s=Math.max(60,+j.retryIn||1800);store.set('capCoolUntil',Date.now()+s*1000);return{lines:[],err:'cooldown',retryIn:s}}
+   if(!j||!j.ok||!Array.isArray(j.lines))return{lines:[],err:'none',retryIn:12*3600};
+   const lines=Array.isArray(j.words)&&j.words.length?phrasesFromTimedWords(j.words):j.lines.map(x=>({t:+x.t,end:+x.end||undefined,text:cueText(x.text)})); // automática: frases montadas aqui pelas pausas do canto
+   return{lines:tidyLines(lines),err:'',retryIn:0};
+  }catch(e){return{lines:[],err:'net',retryIn:600}}finally{clearTimeout(timer)}
+ };
+ const p=_capQ.then(run,run);_capQ=p.catch(()=>{});_capWait[vid]=p;p.finally(()=>{delete _capWait[vid]});return p; // fila: um de cada vez
+}
+/** estado da letra de uma faixa (selo no seletor): 'ok' salva e válida · 'old' salva mas venceu (busca de novo ao tocar) · 'wait' sem letra, nova tentativa marcada · 'auto' nunca buscou */
+function songCapState(tr){
+ if(tr.src!=='yt')return'';
+ if(tr.lines&&tr.lines.length)return tr.capSrc&&tr.capAt&&Date.now()-tr.capAt>SONG_CAP_TTL?'old':'ok';
+ if(tr.capRetryAt&&tr.capRetryAt>Date.now())return'wait';
+ return'auto';
 }
 /** palavras digitáveis de uma frase: só letras (apóstrofo/pontuação/números saem), minúsculas, até 16 letras */
 const lyricWords=s=>String(s||'').toLowerCase().normalize('NFC').split(/\s+/).map(w=>w.replace(/[^\p{L}]/gu,'')).filter(Boolean); // palavra inteira, sem corte
@@ -227,23 +245,26 @@ const Rhythm={
   this.stop();this.track=tr;this.last=tr;this.stats={perfect:0,great:0,ok:0,miss:0};this.lastJ='';this.ended=false;this.beat=-1;this.ni=0;this.t=0;this.paused=false;
   this.mood=this.moodT=1;this.moodHold=0;this.lastVol=-1;this.hasLyrics=false;sfxApply(); // 🔊 efeitos baixinhos enquanto a faixa toca
   this.diff=songDiff(); // 🎚️ dificuldade escolhida no seletor (vale para a partida inteira)
-  this.needBegin=true; // a partida abre no 1º "tocando" do vídeo (não dá para olhar G.song: depois de perder, a partida anterior ainda está na memória)
+  this.needBegin=true;this.capNote=''; // a partida abre no 1º "tocando" do vídeo (não dá para olhar G.song: depois de perder, a partida anterior ainda está na memória)
   if(tr.src==='drum'){this.dur=tr.dur;this.notes=beatNotes(tr.bpm,tr.offset||0,tr.every||3,tr.dur);this.begin();
    const ac=getAC();if(ac.state==='suspended')ac.resume();this.t0=ac.currentTime+.12;drumStart(this.t0);return}
   // YouTube
   if(location.protocol==='file:'){this.fail('song.err.file');return}
-  // 🎞️ sem letra/mapa ainda: pede as legendas do vídeo ao servidor (1× por faixa; se falhar tenta de novo só no dia seguinte)
-  const oldCap=tr.capSrc&&(tr.capV|0)<SONG_CAP_V; // legenda baixada por uma versão antiga do servidor → busca de novo
-  if((oldCap||!(tr.lines&&tr.lines.length))&&!(tr.chart&&tr.chart.length)&&songCaptionsApi()&&(oldCap||!(tr.capTried&&Date.now()-tr.capTried<864e5))){
+  // 🎞️ pede a legenda ao servidor SÓ para a música que vai tocar: sem letra ainda, letra de versão antiga ou letra vencida (7 dias).
+  //  Falhou: "pausa" do servidor → tenta quando ela acabar · sem legenda → 12 h · rede → 10 min. Letra vencida que falhar continua valendo.
+  const hasL=tr.lines&&tr.lines.length,oldCap=tr.capSrc&&(tr.capV|0)<SONG_CAP_V,stale=hasL&&tr.capSrc&&(!tr.capAt||Date.now()-tr.capAt>SONG_CAP_TTL);
+  if((oldCap||stale||!hasL)&&!(tr.chart&&tr.chart.length)&&songCaptionsApi()&&!(tr.capRetryAt&&tr.capRetryAt>Date.now()&&!oldCap)){
    showOverlay(`<div class="songload"><span class="spin" aria-hidden="true">🎞️</span><b>${t('song.cap.loading')}</b><small>${esc(tr.title||'')}</small></div>`,'glass');
-   const lines=await fetchCaptions(tr.vid);if(this.track!==tr)return;
-   tr.capTried=Date.now();if(lines.length>=3){tr.lines=lines;tr.capSrc=1;tr.capV=SONG_CAP_V}
-   Rhythm.saveCustom(Rhythm.custom().map(x=>x.id===tr.id?Object.assign({},x,{lines:tr.lines||[],capTried:tr.capTried,capSrc:tr.capSrc||0,capV:tr.capV||0}):x));
+   const res=await fetchCaptions(tr.vid);if(this.track!==tr)return;
+   if(res.lines.length>=3){tr.lines=res.lines;tr.capSrc=1;tr.capV=SONG_CAP_V;tr.capAt=Date.now();tr.capRetryAt=0}
+   else{tr.capRetryAt=Date.now()+res.retryIn*1000;if(res.err==='cooldown')this.capNote=t('song.cap.cool',{m:Math.ceil(res.retryIn/60)})}
+   Rhythm.saveCustom(Rhythm.custom().map(x=>x.id===tr.id?Object.assign({},x,{lines:tr.lines||[],capSrc:tr.capSrc||0,capV:tr.capV||0,capAt:tr.capAt||0,capRetryAt:tr.capRetryAt||0}):x));
   }
   showOverlay(`<div class="songload"><span class="spin" aria-hidden="true">🎵</span><b>${t('song.loading')}</b><small>${esc(tr.title||'')}</small></div>`,'glass');
   try{await ytLoad()}catch(e){this.fail('song.err.net');return}
   if(this.track!==tr)return; // trocou de faixa enquanto carregava
-  const dock=songDock(true);dock.innerHTML='<div id="ytPlayer"></div>';
+  const dock=songDock(true);dock.innerHTML='<div id="ytPlayer"></div>';songDockAd(true); // até a música começar o vídeo aceita clique: anúncio antes da música → "Pular"
+  setTimeout(()=>{if(this.track===tr&&this.needBegin){const o=document.querySelector('#overlay .songload small');if(o)o.textContent=t('song.adWait')}},3500);
   this.yt=new YT.Player('ytPlayer',{width:'100%',height:'100%',videoId:tr.vid,
    playerVars:{autoplay:0,controls:0,disablekb:1,fs:0,rel:0,playsinline:1,iv_load_policy:3,origin:location.origin},
    events:{
@@ -264,6 +285,7 @@ const Rhythm={
   hideOverlay();newGame();G.song=this.track;G.wave=1;G.banner=0;G.spawnLeft=0;G.boss=false;G.bossWave=false;this.playing=true;this.rt=performance.now();
   if(typeof musicMix==='function')musicMix();
   songSideShow(true);songDock(this.track.src==='yt'); // painel da música primeiro: o vídeo se encaixa no espaço dele
+  songDockAd(false);songRefocus();
  },
  fail(key){
   this.stop();hideOverlay();if(state!=='menu')showMenu();
@@ -381,7 +403,8 @@ const Rhythm={
   c.font='800 10px Nunito';c.textAlign='center';c.fillStyle='#c6cde8';
   c.fillText(calcWpm()+' WPM · '+calcAcc()+'% · ✨'+this.stats.perfect+' 💫'+this.stats.great,x+w/2,y+33);
   if(this.stalled){c.font='900 15px Nunito';c.fillStyle='rgba(6,8,26,.85)';c.beginPath();c.roundRect(TX-170,H/2-60,340,40,12);c.fill();c.strokeStyle='rgba(233,216,188,.6)';c.lineWidth=1.2;c.stroke();
-   c.fillStyle='#ffe9a8';c.fillText('📺 '+t('song.stall'),TX,H/2-34)} // aviso: anúncio/carregamento, a partida espera
+   c.fillStyle='#ffe9a8';c.fillText('📺 '+t('song.stall'),TX,H/2-34);
+   c.font='800 11px Nunito';c.fillStyle='rgba(233,216,188,.8)';c.fillText(t('song.stallTip'),TX,H/2-6)} // aviso: anúncio/carregamento, a partida espera
   const nx=this.hasLyrics?this.notes[this.ni]:null; // 🎤 próxima frase (prévia discreta sob o painel)
   if(nx&&nx.text&&!songSideOn()){c.font='italic 700 10.5px Nunito';c.fillStyle='rgba(233,216,188,.6)';c.fillText(fitTxt(c,'▸ '+nx.text,w+16),x+w/2,y+50)} // com o painel da música aberto, a próxima frase fica lá
   if(this.lastJT>0){this.lastJT=Math.max(0,this.lastJT-1/60);c.globalAlpha=Math.min(1,this.lastJT*2);c.font='900 15px Cinzel';
@@ -395,9 +418,20 @@ const Rhythm={
 // do jogo e pausaria a partida). No PC fica sobre o topo do painel direito; sem painel (janela estreita/celular), no canto.
 function songDock(on){
  let d=document.getElementById('songDock');
- if(!on){if(d){d.classList.remove('on');d.innerHTML=''}return d}
+ if(!on){if(d){d.classList.remove('on','ad');d.innerHTML=''}return d}
  if(!d){d=document.createElement('div');d.id='songDock';d.className='songdock';d.setAttribute('aria-label','YouTube');document.body.appendChild(d)}
- d.classList.add('on');songDockPlace();return d;
+ d.dataset.tip=t('song.adTip');d.classList.add('on');songDockPlace();return d;
+}
+// 📺 anúncio: o vídeo vira clicável (moldura acesa + "Clique em Pular") só enquanto a música não anda; o clique no iframe
+//  não pausa a partida (ver blur em main.js) e, quando a música volta, o teclado volta para o jogo sozinho.
+const songAdOpen=()=>{const d=document.getElementById('songDock');return!!d&&d.classList.contains('ad')};
+function songDockAd(on){const d=document.getElementById('songDock');if(d)d.classList.toggle('ad',!!on)}
+function songRefocus(){
+ const a=document.activeElement;if(!a||a.tagName!=='IFRAME')return;
+ let k=document.getElementById('songFocus');
+ if(!k){k=document.createElement('i');k.id='songFocus';k.tabIndex=-1;k.style.cssText='position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;outline:0';document.body.appendChild(k)}
+ k.focus({preventScroll:true});
+ if(!document.hasFocus()&&state==='play')pause(); // saiu da janela durante o anúncio: a partida espera pausada
 }
 function songDockPlace(){
  const d=document.getElementById('songDock');if(!d||!d.classList.contains('on'))return;
@@ -416,7 +450,9 @@ function tabSongs(){
  const fileWarn=(songErr?`<p class="songwarn">⚠️ ${esc(songErr)}</p>`:'')+(location.protocol==='file:'&&!songErr?`<p class="songwarn">⚠️ ${t('song.err.file')}</p>`:'');songErr='';
  const card=(tr,del)=>{const name=tr.src==='drum'?t(tr.title):esc(tr.title||tr.vid);
   const meta=tr.src==='drum'?`${tr.bpm} BPM · ${Math.round(tr.dur/60*10)/10} min · ${t('song.offline')}`:`${tr.lines&&tr.lines.length?'🎤 '+t('song.lyricsN',{n:tr.lines.length}):tr.chart&&tr.chart.length?t('song.chartN',{n:tr.chart.length}):tr.auto?'✨ '+t('song.auto')+(tr.synced?' · 🥁 '+tr.bpm+' BPM':''):(tr.bpm||100)+' BPM'} · YouTube`;
-  return`<div class="songcard ${tr.src}"><span class="songic" aria-hidden="true">${tr.src==='drum'?'🥁':'📺'}</span><div class="songtx"><b>${name}</b><small>${meta}</small></div>
+  const cs=songCapState(tr),left=tr.capAt?Math.max(0,Math.ceil((tr.capAt+SONG_CAP_TTL-Date.now())/864e5)):0; // 🏷️ selo: letra salva (dias que faltam) · vencida · aguardando · ainda não buscada
+  const badge=cs==='ok'?`<em class="capb ok" title="${esc(t('song.cap.okTip'))}">✅ ${t('song.cap.ok')}${tr.capAt?' · '+t('song.cap.days',{n:left}):''}</em>`:cs==='old'?`<em class="capb old">♻️ ${t('song.cap.old')}</em>`:cs==='wait'?`<em class="capb wait">⏳ ${t('song.cap.wait')}</em>`:cs==='auto'?`<em class="capb auto">🎞️ ${t('song.cap.auto')}</em>`:'';
+  return`<div class="songcard ${tr.src}${cs==='ok'?' playable':''}"><span class="songic" aria-hidden="true">${tr.src==='drum'?'🥁':'📺'}</span><div class="songtx"><b>${name}</b><small>${meta}</small>${badge}</div>
    ${del?`<button class="songdel" onclick="songDelete('${tr.id}')" aria-label="${esc(t('song.delete'))}">✕</button><button class="songmap" onclick="songEdit('${tr.id}','sync')" title="${esc(t('song.sync.btn'))}">🥁${tr.synced?' ✓':''}</button><button class="songmap" onclick="songEdit('${tr.id}')">✏️ ${t('song.ed.map')}</button>`:''}<button class="btn songplay" onclick="Rhythm.pick('${tr.id}')">▶ ${t('song.play')}</button></div>`};
  const hist=(Array.isArray(profile.songHistory)?profile.songHistory:[]).slice(0,5);
  // 🎯 tela limpa: [ cole o link ] [ JOGAR ] no topo; faixas prontas e as suas logo abaixo; BPM/tempos só no "Avançado"
@@ -429,7 +465,7 @@ function tabSongs(){
  <p class="songhint">${t(capOn?'song.cap.hint':'song.quick.hint')}</p>${quickErr?`<p class="songwarn">⚠️ ${esc(quickErr)}</p>`:''}${fileWarn}
  <div class="songdiff" role="radiogroup" aria-label="${esc(t('song.diff.title'))}"><span>🎚️ ${t('song.diff.title')}</span>${['easy','normal','full'].map(d=>`<button class="${songDiff()===d?'on':''}" role="radio" aria-checked="${songDiff()===d}" onclick="songSetDiff('${d}')" title="${esc(t('song.diff.'+d+'Tip'))}">${t('song.diff.'+d)}</button>`).join('')}<small>${t('song.diff.'+songDiff()+'Tip')}</small></div>
  <h4 class="songh">🥁 ${t('song.ready')}</h4><div class="songlist">${SONG_DRUMS.map(x=>card(x,false)).join('')}</div>
- ${Rhythm.custom().length?`<h4 class="songh">📺 ${t('song.yours')}</h4><div class="songlist">${Rhythm.custom().map(x=>card(x,true)).join('')}</div>`:''}
+ ${Rhythm.custom().length?`<h4 class="songh">📺 ${t('song.yours')}</h4><p class="songhint">${t('song.cap.note')}${capCoolUntil()>Date.now()?' · 🧊 '+t('song.cap.cool',{m:Math.ceil((capCoolUntil()-Date.now())/6e4)}):''}</p><div class="songlist">${Rhythm.custom().slice().sort((a,b)=>(songCapState(a)==='ok'?0:1)-(songCapState(b)==='ok'?0:1)).map(x=>card(x,true)).join('')}</div>`:''}
  <details class="songform"${songFormErr?' open':''}><summary>⚙️ ${t('song.adv')}</summary>
   <label>🎞️ ${t('song.cap.api')}<input id="sgCapApi" placeholder="https://….workers.dev" autocomplete="off" spellcheck="false" value="${esc(store.get('captionsApi','')||'')}" onchange="songSetCapApi(this.value)"></label>
   <small class="songhint">${t(SONG_CAPTIONS_API?'song.cap.apiBuiltIn':'song.cap.apiHint')}</small>
@@ -750,12 +786,14 @@ function sedBeatSave(play){
 Object.assign(Rhythm,{
  stalled:false,lastY:-1,lastAdv:0,stRead:0,
  stallCheck(){
-  if(!this.track||this.track.src!=='yt'||!this.yt||this.paused||!this.playing)return this.stalled=false;
+  if(!this.track||this.track.src!=='yt'||!this.yt||this.paused||!this.playing){if(this.stalled)songDockAd(false);return this.stalled=false}
+  const was=this.stalled;
   const now=performance.now();
   if(now-this.stRead>150){this.stRead=now;try{const y=this.yt.getCurrentTime()||0;this.ytState=this.yt.getPlayerState();if(Math.abs(y-this.lastY)>.01||this.lastY<0){this.lastY=y;this.lastAdv=now;if(this.stalled){this.t=y;this.ytRead=now}}}catch(e){}}
   const notPlaying=typeof YT!=='undefined'&&this.ytState!=null&&this.ytState!==YT.PlayerState.PLAYING&&this.ytState!==YT.PlayerState.ENDED; // carregando/pausado pelo player: espera na hora
   const st=(notPlaying||now-this.lastAdv>400)&&!this.ended;
   if(st)this.rt=now; // relógio não acumula enquanto espera
+  if(st!==was){songDockAd(st);if(!st)songRefocus()}
   return this.stalled=st;
  }
 });
@@ -811,7 +849,7 @@ function songSideUpdate(force){
  set('ssClock',mm(T0)+' / '+mm(R.dur));const b=document.getElementById('ssBar');if(b)b.style.width=Math.min(100,T0/Math.max(1,R.dur)*100).toFixed(1)+'%';
  set('ssDiff',R.hasLyrics?'🎚️ '+t('song.diff.'+(R.diff||'normal')):'🥁 '+(R.track.bpm||'')+' BPM');
  const box=document.getElementById('ssLyr');if(!box)return;
- if(!R.hasLyrics){if(SS.last!=='none'){SS.last='none';box.innerHTML=`<p class="ssnone">${t('song.side.noLyrics')}</p>`}return}
+ if(!R.hasLyrics){if(SS.last!=='none'){SS.last='none';box.innerHTML=`<p class="ssnone">${t('song.side.noLyrics')}</p>${R.capNote?`<p class="ssnone">🧊 ${esc(R.capNote)}</p>`:''}`}return} // 🧊 servidor em pausa: diz quando tentar de novo
  // karaokê: frase da vez = a mais antiga ainda na tela (ou, se nenhuma, a próxima a nascer)
  const cur=R.currentLyric(),ci=cur?R.notes.indexOf(cur.lyric):R.ni;set('ssLines',Math.min(R.notes.length,Math.max(0,ci)+1)+' / '+R.notes.length);
  if(ci===SS.lastI)return;SS.lastI=ci;

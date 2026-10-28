@@ -63,6 +63,11 @@ body.is-mobile .side{background:linear-gradient(#151a42,#090d26);border-top:1px 
  background:#000 padding-box,var(--frame-gold-hi) border-box;box-shadow:0 18px 40px -12px rgba(0,0,0,.85),0 0 24px rgba(201,166,255,.25)}
 .songdock.on{display:block}
 .songdock iframe{width:100%;height:100%;border:0;pointer-events:none;display:block}
+/* 📺 anúncio: o vídeo aceita clique (botão "Pular" do YouTube) e a moldura pulsa para chamar a atenção */
+.songdock.ad{animation:adPulse 1.4s ease-in-out infinite}
+.songdock.ad iframe{pointer-events:auto}
+.songdock.ad:after{content:attr(data-tip);position:absolute;left:8px;top:8px;padding:3px 10px;border-radius:999px;background:rgba(6,8,26,.86);color:#ffe9a8;font:800 11px Nunito,sans-serif;pointer-events:none;box-shadow:0 0 0 1px rgba(255,211,107,.5)}
+@keyframes adPulse{0%,100%{box-shadow:0 0 0 3px rgba(255,211,107,.45),0 0 26px rgba(255,200,90,.6)}50%{box-shadow:0 0 0 3px rgba(255,211,107,.12),0 0 10px rgba(255,200,90,.25)}}
 .songload{display:flex;flex-direction:column;align-items:center;gap:8px;padding:30px;color:var(--txt-hi)}.songload .spin{font-size:38px;animation:vBob 1.2s ease-in-out infinite}.songload small{color:var(--txt-dim)}
 .songover{display:flex;flex-direction:column;align-items:center;gap:6px;margin:8px auto 4px;padding:10px 14px;border-radius:14px;border:1px solid transparent;background:var(--glass-deep) padding-box,var(--frame-gold) border-box;max-width:460px}
 .songover>b{color:var(--gold2)}.songover>span{color:var(--txt-dim);font-size:12.5px}.songover small{color:var(--violet);font-weight:800}
@@ -295,4 +300,8 @@ body.song-mode .songside{display:flex;flex-direction:column;gap:10px;padding-top
 .ssl.ch:before{content:'★ ';color:#ffe9a8}
 .ssnone{margin:0;color:var(--txt-dim);font-size:12.5px;line-height:1.5}
 .ssfoot{display:flex;justify-content:space-between;align-items:center;font:800 12px Nunito,sans-serif;color:var(--gold2)}
-.ssfoot .pact{width:auto;margin:0;padding:6px 12px}
+.ssfoot .pact{width:auto;margin:0;padding:6px 12px}/* 🏷️ selo de letra nas faixas */
+.capb{display:inline-block;margin-top:3px;padding:1px 8px;border-radius:999px;font:800 10.5px Nunito,sans-serif;font-style:normal;width:max-content;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.capb.ok{background:rgba(93,255,168,.14);color:#9dffc8;border:1px solid rgba(93,255,168,.35)}
+.capb.old{background:rgba(255,210,74,.12);color:#ffe08a}.capb.wait{background:rgba(255,176,112,.12);color:var(--peach)}.capb.auto{background:rgba(255,255,255,.06);color:var(--txt-dim)}
+.songcard.playable{background:linear-gradient(180deg,rgba(24,52,46,.85),rgba(10,20,26,.9)) padding-box,linear-gradient(155deg,#b8ffd8,#3a8a6a 50%,#e9d8bc) border-box}

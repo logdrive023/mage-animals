@@ -38,7 +38,7 @@ document.addEventListener('visibilitychange',()=>{
  if(document.hidden){if(state==='play')pause();stopLoop()}
  else startLoop();
 });
-window.addEventListener('blur',()=>{if(state==='play')pause()});
+window.addEventListener('blur',()=>{if(state==='play'&&!songAdOpen())pause()}); // 📺 clique em "Pular" no anúncio do vídeo não pausa a partida
 
 // Boot
 buildKb();applyI18n();applyPanels();renderProfile();renderSide();renderEnemyList();

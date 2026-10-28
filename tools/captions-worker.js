@@ -14,6 +14,8 @@
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 const CACHE_SECONDS = 7 * 86400; // a mesma legenda é servida do cache por 7 dias (o YouTube limita quem pede demais: 429 / "login necessário")
+const COOLDOWN_SECONDS = 1800;   // 🧊 bloqueado pelo YouTube → 30 min sem perguntar nada a ele (responde "cooldown" na hora)
+const NONE_SECONDS = 12 * 3600;  // vídeo sem legenda: não pergunta de novo por 12 h
 
 export default {
   async fetch(request, env, ctx) {
@@ -34,11 +36,21 @@ export default {
     const lang = (url.searchParams.get('lang') || 'pt').slice(0, 5).toLowerCase();
     if (!/^[\w-]{11}$/.test(vid)) return json({ ok: false, error: 'bad_id' }, 400, cors);
 
-    // cache da Cloudflare (por vídeo + idioma)
-    const cacheKey = new Request(`https://captions.cache/v4/${vid}/${lang}`); // v3: idioma da voz + frases da legenda automática remontadas pelas pausas
+    // cache da Cloudflare: 1 cópia por VÍDEO (a escolha da faixa é pelo idioma da voz, o idioma da interface não muda nada)
     const cache = caches.default;
+    const cacheKey = new Request(`https://captions.cache/v5/${vid}`);
+    const noKey = new Request(`https://captions.cache/v5-none/${vid}`); // "este vídeo não tem legenda" (12 h)
+    const coolKey = new Request('https://captions.cache/v5-cooldown'); // 🧊 o YouTube bloqueou: pausa geral (30 min)
+    const jsonH = { ...cors, 'Content-Type': 'application/json; charset=utf-8' };
     const hit = await cache.match(cacheKey);
-    if (hit) return new Response(hit.body, { status: 200, headers: { ...cors, 'Content-Type': 'application/json; charset=utf-8', 'X-Cache': 'HIT' } });
+    if (hit) return new Response(hit.body, { status: 200, headers: { ...jsonH, 'X-Cache': 'HIT' } });
+    const none = await cache.match(noKey);
+    if (none) return new Response(await none.text(), { status: 404, headers: { ...jsonH, 'X-Cache': 'NONE' } });
+    const cool = await cache.match(coolKey);
+    if (cool) { // em pausa: responde na hora, sem perguntar ao YouTube (insistir só prolonga o bloqueio)
+      const c = await cool.json(), retryIn = Math.max(60, Math.round((c.until - Date.now()) / 1000));
+      return json({ ok: false, error: 'cooldown', retryIn }, 503, { ...cors, 'Retry-After': String(retryIn) });
+    }
 
     let result;
     try { result = await getCaptions(vid, lang); }
@@ -46,7 +58,13 @@ export default {
 
     const body = JSON.stringify(result);
     if (result.ok) ctx.waitUntil(cache.put(cacheKey, new Response(body, { headers: { 'Cache-Control': `max-age=${CACHE_SECONDS}` } })));
-    return new Response(body, { status: result.ok ? 200 : 404, headers: { ...cors, 'Content-Type': 'application/json; charset=utf-8', 'X-Cache': 'MISS' } });
+    else if (result.error === 'blocked') { // entra em pausa por COOLDOWN_SECONDS
+      const until = Date.now() + COOLDOWN_SECONDS * 1000;
+      ctx.waitUntil(cache.put(coolKey, new Response(JSON.stringify({ until }), { headers: { 'Cache-Control': `max-age=${COOLDOWN_SECONDS}` } })));
+      result.retryIn = COOLDOWN_SECONDS;
+    } else if (result.error === 'no_captions' || result.error === 'empty_track')
+      ctx.waitUntil(cache.put(noKey, new Response(body, { headers: { 'Cache-Control': `max-age=${NONE_SECONDS}` } })));
+    return new Response(JSON.stringify(result), { status: result.ok ? 200 : result.error === 'blocked' ? 503 : 404, headers: { ...jsonH, 'X-Cache': 'MISS' } });
   }
 };
 
@@ -164,7 +182,9 @@ async function getCaptions(vid, lang) {
       } catch (e) { dbg.push(`${s.src}${fmt}:err`); }
     }
   }
-  return { ok: false, error: found ? 'empty_track' : 'no_captions', debug: dbg };
+  // bloqueio = todas as fontes recusaram (login exigido / 429 / erro), em vez de "o vídeo simplesmente não tem legenda"
+  const blocked = !found && dbg.length > 0 && dbg.every(d => /LOGIN_REQUIRED|:429|:err|:403/.test(d));
+  return { ok: false, error: blocked ? 'blocked' : found ? 'empty_track' : 'no_captions', debug: dbg };
 }
 
 function decode(s) {

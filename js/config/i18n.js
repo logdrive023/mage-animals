@@ -2198,6 +2198,9 @@ i18nExtend({
 });
 // 📺 anúncio/carregamento no vídeo
 i18nExtend({'pt-BR':{song:{stall:'Anúncio ou carregando… a partida espera'}},en:{song:{stall:'Ad or loading… the game waits'}},es:{song:{stall:'Anuncio o cargando… la partida espera'}}});
+i18nExtend({'pt-BR':{song:{stallTip:'Nada se perde: tudo continua quando a música voltar · pode clicar em “Pular” no vídeo',adTip:'📺 Anúncio? Clique em “Pular”',adWait:'Anúncio no vídeo? Clique em “Pular” no vídeo — a partida começa sozinha'}},
+ en:{song:{stallTip:'Nothing is lost: it all resumes when the music is back · you can click “Skip” on the video',adTip:'📺 Ad? Click “Skip”',adWait:'Ad on the video? Click “Skip” on the video — the match starts by itself'}},
+ es:{song:{stallTip:'No se pierde nada: todo sigue cuando vuelva la música · puedes pulsar “Omitir” en el video',adTip:'📺 ¿Anuncio? Pulsa “Omitir”',adWait:'¿Anuncio en el video? Pulsa “Omitir” en el video — la partida empieza sola'}}});
 // 🎤 letra sincronizada direto na barra de link
 i18nExtend({
  'pt-BR':{song:{quick:{lrc:'Tenho a letra sincronizada (LRC) — opcional',lrcHint:'Cole o conteúdo de um arquivo .lrc desta música: cada frase vira um Asteroide do Bardo no momento em que é cantada. Sem letra, o jogo usa palavras próprias no ritmo.'},err:{lrc:'Não reconheci a letra: cada linha precisa começar com o tempo, como [00:18.50].'}}},
@@ -2245,3 +2248,12 @@ i18nExtend({
 });
 // 🎵 painel da música
 i18nExtend({'pt-BR':{song:{side:{noLyrics:'Esta música está sem legenda: as palavras chegam no ritmo da batida.'}}},en:{song:{side:{noLyrics:'This song has no subtitles: words arrive on the beat.'}}},es:{song:{side:{noLyrics:'Esta canción no tiene subtítulos: las palabras llegan al ritmo del pulso.'}}}});
+// 🏷️ selo de letra salva + pausa do servidor
+i18nExtend({
+ 'pt-BR':{song:{cap:{ok:'letra salva',okTip:'Frases já baixadas: joga com a letra sincronizada, sem pedir nada ao servidor.',days:'{n} dia(s)',old:'letra vencida (busca de novo ao tocar)',wait:'sem letra por enquanto (tenta de novo mais tarde)',auto:'letra buscada ao tocar',
+   note:'✅ = letra salva neste navegador. Por enquanto cada letra fica salva por 7 dias; depois disso é buscada de novo quando você tocar a música.',cool:'Servidor de legendas em pausa: tenta de novo em ~{m} min. Enquanto isso, a música toca com palavras no ritmo.'}}},
+ en:{song:{cap:{ok:'lyrics saved',okTip:'Lines already downloaded: plays with synced lyrics without asking the server.',days:'{n} day(s)',old:'lyrics expired (fetched again on play)',wait:'no lyrics yet (retries later)',auto:'lyrics fetched on play',
+   note:'✅ = lyrics saved in this browser. For now each set of lyrics is kept for 7 days; after that it is fetched again when you play the song.',cool:'Subtitle server paused: retrying in ~{m} min. Meanwhile the song plays with words to the beat.'}}},
+ es:{song:{cap:{ok:'letra guardada',okTip:'Frases ya descargadas: juega con la letra sincronizada sin pedir nada al servidor.',days:'{n} día(s)',old:'letra vencida (se busca de nuevo al tocar)',wait:'sin letra por ahora (reintenta más tarde)',auto:'letra buscada al tocar',
+   note:'✅ = letra guardada en este navegador. Por ahora cada letra se guarda 7 días; después se busca de nuevo cuando toques la canción.',cool:'Servidor de subtítulos en pausa: reintenta en ~{m} min. Mientras tanto la canción suena con palabras al ritmo.'}}}
+});
