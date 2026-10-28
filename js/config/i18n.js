@@ -2257,3 +2257,32 @@ i18nExtend({
  es:{song:{cap:{ok:'letra guardada',okTip:'Frases ya descargadas: juega con la letra sincronizada sin pedir nada al servidor.',days:'{n} día(s)',old:'letra vencida (se busca de nuevo al tocar)',wait:'sin letra por ahora (reintenta más tarde)',auto:'letra buscada al tocar',
    note:'✅ = letra guardada en este navegador. Por ahora cada letra se guarda 7 días; después se busca de nuevo cuando toques la canción.',cool:'Servidor de subtítulos en pausa: reintenta en ~{m} min. Mientras tanto la canción suena con palabras al ritmo.'}}}
 });
+// ⚔️ online: fim da luta → lobby sozinho, os dois marcam "pronto" e a luta começa em 3 s
+i18nExtend({'pt-BR':{online:{goIn:'⚔️ Os dois prontos! A luta começa em {s}…',again:'Jogar de novo',waitRival:'Esperando o rival marcar pronto…'},pvp:{lobbyIn:'Lobby em {s}s',lobbyHint:'Voltando ao lobby: lá os dois marcam se querem jogar de novo (Enter).'}},
+ en:{online:{goIn:'⚔️ Both ready! Fight starts in {s}…',again:'Play again',waitRival:'Waiting for the rival to get ready…'},pvp:{lobbyIn:'Lobby in {s}s',lobbyHint:'Back to the lobby: there both of you choose to play again (Enter).'}},
+ es:{online:{goIn:'⚔️ ¡Los dos listos! La lucha empieza en {s}…',again:'Jugar de nuevo',waitRival:'Esperando a que el rival esté listo…'},pvp:{lobbyIn:'Lobby en {s}s',lobbyHint:'Volviendo al lobby: allí los dos eligen si juegan de nuevo (Enter).'}}});
+// 📖 regras da batalha online explicadas (lobby, contagem e embaixo das palavras especiais)
+i18nExtend({'pt-BR':{pvp:{how:{title:'Como funciona a batalha',intro:'Às vezes uma palavra vem com um ícone: complete-a para ganhar o efeito.',
+  gold:'Cura',goldD:'Ao completar, você recupera 15 de vida.',goldB:'Complete: você recupera 15 de vida',goldR:'Se ele completar, recupera 15 de vida',
+  shield:'Escudo',shieldD:'Ao completar, bloqueia o próximo golpe do rival.',shieldB:'Complete: bloqueia o próximo golpe do rival',shieldR:'Se ele completar, bloqueia o seu próximo golpe',
+  ice:'Congela',iceD:'Ao completar, o rival fica 1,2 s sem conseguir digitar.',iceB:'Complete: o rival fica 1,2 s sem digitar',iceR:'Se ele completar, você fica 1,2 s congelado',
+  crit:'Crítico',critD:'Ao completar, o golpe causa o dobro de dano.',critB:'Complete: o golpe causa DANO DOBRADO',critR:'Se ele completar, o golpe dele é dobrado',
+  first:'Primeiro!',firstD:'Quem completa a palavra de mesmo número antes do rival causa +30% de dano.',
+  combo:'Combo',comboD:'Cada palavra seguida sem errar soma +6% de dano (até 10).',
+  sd:'Morte súbita',sdD:'Depois de 60 s, o dano de todos sobe 10% a cada 10 s.'}}},
+ en:{pvp:{how:{title:'How the battle works',intro:'Sometimes a word comes with an icon: finish it to get the effect.',
+  gold:'Heal',goldD:'When you finish it, you recover 15 HP.',goldB:'Finish: you recover 15 HP',goldR:'If they finish it, they recover 15 HP',
+  shield:'Shield',shieldD:'When you finish it, it blocks the rival’s next hit.',shieldB:'Finish: blocks the rival’s next hit',shieldR:'If they finish it, your next hit is blocked',
+  ice:'Freeze',iceD:'When you finish it, the rival can’t type for 1.2 s.',iceB:'Finish: the rival can’t type for 1.2 s',iceR:'If they finish it, you freeze for 1.2 s',
+  crit:'Critical',critD:'When you finish it, the hit deals double damage.',critB:'Finish: the hit deals DOUBLE DAMAGE',critR:'If they finish it, their hit is doubled',
+  first:'First!',firstD:'Whoever finishes the same-numbered word before the rival deals +30% damage.',
+  combo:'Combo',comboD:'Each word in a row without mistakes adds +6% damage (up to 10).',
+  sd:'Sudden death',sdD:'After 60 s, everyone’s damage rises 10% every 10 s.'}}},
+ es:{pvp:{how:{title:'Cómo funciona la batalla',intro:'A veces una palabra trae un icono: complétala para ganar el efecto.',
+  gold:'Cura',goldD:'Al completarla, recuperas 15 de vida.',goldB:'Completa: recuperas 15 de vida',goldR:'Si él la completa, recupera 15 de vida',
+  shield:'Escudo',shieldD:'Al completarla, bloquea el próximo golpe del rival.',shieldB:'Completa: bloquea el próximo golpe del rival',shieldR:'Si él la completa, bloquea tu próximo golpe',
+  ice:'Congela',iceD:'Al completarla, el rival pasa 1,2 s sin poder escribir.',iceB:'Completa: el rival pasa 1,2 s sin escribir',iceR:'Si él la completa, te congelas 1,2 s',
+  crit:'Crítico',critD:'Al completarla, el golpe hace el doble de daño.',critB:'Completa: el golpe hace DAÑO DOBLE',critR:'Si él la completa, su golpe se duplica',
+  first:'¡Primero!',firstD:'Quien completa la palabra del mismo número antes que el rival hace +30% de daño.',
+  combo:'Combo',comboD:'Cada palabra seguida sin errores suma +6% de daño (hasta 10).',
+  sd:'Muerte súbita',sdD:'Después de 60 s, el daño de todos sube 10% cada 10 s.'}}}});

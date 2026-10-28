@@ -21,24 +21,31 @@ function mulberry32(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15
 function duelWordList(lang){
  const seen=new Set(),out=[];
  ((WORD_BANK[lang]||WORD_BANK.pt)+' '+(WORD_EXTRA[lang]||'')).split(/\s+/).forEach(w=>{const p=norm(w);if(/^[a-z]{3,9}$/.test(p)&&!seen.has(p)){seen.add(p);out.push(p)}});
- return{s:out.filter(w=>w.length<=4),m:out.filter(w=>w.length>=5&&w.length<=7),l:out.filter(w=>w.length>=8)};
+ const byLen={};out.forEach(w=>(byLen[w.length]=byLen[w.length]||[]).push(w));
+ return{s:out.filter(w=>w.length<=4),m:out.filter(w=>w.length>=5&&w.length<=7),l:out.filter(w=>w.length>=8),byLen};
 }
 const PVP_RUNES=()=>RUNE_SHAPES.filter(s=>['lines','angles','curves','closed'].includes(s.fam));
-// sequência compartilhada: at(n) → {w, sp} (n começa em 1). Dois geradores (texto e especiais) para um não mexer no outro.
-function pvpSeq(seed,mode,lang){
+// sequência compartilhada: at(n) → {w, rw, sp} (n começa em 1). Dois geradores (texto e especiais) para um não mexer no outro.
+//  Palavras/letras: cada lado recebe um texto DIFERENTE com o MESMO número de letras (a = anfitrião, b = convidado);
+//  w = o meu, rw = o do rival. Os dois aparelhos sorteiam o par inteiro, então a sequência continua idêntica nos dois.
+function pvpSeq(seed,mode,lang,side){
  const r=mulberry32(seed|0),rs=mulberry32((seed^0x5bd1e995)|0),L=mode==='words'?duelWordList(lang):null,S=mode==='runes'?PVP_RUNES():null,out=[];
- const gen=n=>{let w;
-  if(mode==='letters')w=LETTERS[(r()*26)|0];
-  else if(mode==='runes'){w=S[(r()*S.length)|0].code;if(n>8&&r()<.25)w+=S[(r()*S.length)|0].code}
-  else{const x=r(),tier=n<6?(x<.6?'s':'m'):(x<.35?'s':x<.85?'m':'l'),list=L[tier].length?L[tier]:L.m;w=list[(r()*list.length)|0]}
-  const q=rs(),k=rs();return{w,sp:n>=PVP.SP_FROM&&q<PVP.SP_P?PVP_SPK[(k*PVP_SPK.length)|0]:''}};
+ const gen=n=>{let a,b;
+  if(mode==='letters'){a=LETTERS[(r()*26)|0];b=LETTERS[(r()*26)|0];if(b===a)b=LETTERS[(LETTERS.indexOf(a)+1+((r()*25)|0))%26]}
+  else if(mode==='runes'){a=S[(r()*S.length)|0].code;if(n>8&&r()<.25)a+=S[(r()*S.length)|0].code;b=a}
+  else{const x=r(),tier=n<6?(x<.6?'s':'m'):(x<.35?'s':x<.85?'m':'l'),list=L[tier].length?L[tier]:L.m;a=list[(r()*list.length)|0];
+   const same=L.byLen[a.length],k=(r()*Math.max(1,same.length-1))|0;b=same.length>1?same.filter(w=>w!==a)[k]:a}
+  // especiais também são de cada lado (antes os dois pegavam ❄️ na MESMA palavra e um congelava o outro de volta)
+  const spk=()=>{const q=rs(),k=rs();return n>=PVP.SP_FROM&&q<PVP.SP_P?PVP_SPK[(k*PVP_SPK.length)|0]:''};
+  const sa=spk();let sb=spk();if(sa==='ice'&&sb==='ice')sb='crit';
+  return{w:side?b:a,rw:side?a:b,sp:side?sb:sa,rsp:side?sa:sb}};
  return{at(n){n=Math.max(1,n|0);while(out.length<n)out.push(gen(out.length+1));return out[n-1]}};
 }
 // ---------- dano ----------
 const pvpBase=(mode,w)=>mode==='letters'?9:mode==='runes'?13*w.length:5+w.length*1.3;
 function pvpSdMul(d){return d.ft<PVP.SD_T?1:1+PVP.SD_INC*(1+Math.floor((d.ft-PVP.SD_T)/PVP.SD_EVERY))}
 // maior dano possível da palavra n (combo 10, primeiro, crítico, 1 degrau extra de morte súbita pela diferença de relógio)
-function pvpCap(d,n,bal){const it=d.seq.at(n);return Math.ceil(pvpBase(d.mode,it.w)*1.6*PVP.FIRST*(it.sp==='crit'?PVP.CRIT:1)*(pvpSdMul(d)+PVP.SD_INC)*bal)+1}
+function pvpCap(d,n,bal,mine){const it=d.seq.at(n),sp=mine?it.sp:it.rsp;return Math.ceil(pvpBase(d.mode,mine?it.w:it.rw)*1.6*PVP.FIRST*(sp==='crit'?PVP.CRIT:1)*(pvpSdMul(d)+PVP.SD_INC)*bal)+1}
 
 let pvpSaved=null;
 function startOnlineDuel(cfg){
@@ -49,7 +56,7 @@ function startOnlineDuel(cfg){
  GAME_STYLE=mode;if(DeviceManager.isMobile&&mode!=='runes')Input.mode=mode==='letters'?'draw':'keys';Input.sync();
  G=freshState('duel');G.runes=mode==='runes';
  const bal=cfg.bal!==false&&!!DeviceManager.isTouch!==!!R.touch; // equilíbrio só vale quando um está no toque e o outro não
- G.duel={online:true,mode,li:-1,seq:pvpSeq(cfg.seed|0,mode,cfg.lang||LANG),wlang:cfg.lang||LANG,cur:0,qsp:['',''],
+ G.duel={online:true,mode,li:-1,seq:pvpSeq(cfg.seed|0,mode,cfg.lang||LANG,Net.role==='host'?0:1),wlang:cfg.lang||LANG,cur:0,qsp:['',''],
   L:{id:'online',color:R.color||base.color,wpm:0},rname:R.nick||'?',rav:R.av||'',rwpm:0,
   max:DUEL_HP,php:DUEL_HP,bhp:DUEL_HP,pShow:DUEL_HP,bShow:DUEL_HP,phit:0,bhit:0,queue:[],cd:3.4,
   ft:0,rDone:0,rCur:1,rChars:0,rAtkN:0,sent:[],hits:[],atkLog:[],recon:0,bRep:DUEL_HP,bAck:0,bCap:DUEL_HP,
@@ -61,8 +68,8 @@ function startOnlineDuel(cfg){
  G.banner=0;MUS.heat=0;MUS.slow=0;botDrawT=-1;
  renderBg(BIOMES[currentBiome].themes[0]);
  pvpNextWord();
- const b=G.duel.bot,r1=G.duel.seq.at(1);b.word=b.nw=r1.w;b.sp=r1.sp; // o rival começa na mesma palavra
- Net.rematch={me:false,them:false};
+ const b=G.duel.bot,r1=G.duel.seq.at(1);b.word=b.nw=r1.rw;b.sp=r1.rsp; // o rival começa na palavra 1 dele (mesmo tamanho da minha)
+ Net.rematch={me:false,them:false};Net.goStop();
  state='play';hideOverlay();physAcc=0;syncChrome();document.body.classList.add('in-online');pvpEmoBar();fitMenuMobile();updateUI(true);
  snd(220,.5,'sawtooth',.05,440);
 }
@@ -112,33 +119,33 @@ function pvpAttack(){
 function pvpOnAtk(m){
  const d=G.duel,n=m.n|0;d.rAtkN++;
  if(n<1||n>d.rDone+3){d.cheat++;return pvpSendHp()} // fora de ordem (ou absurdo): ignora
- const it=d.seq.at(n),ok=n===d.rDone+1;d.rChars+=it.w.length;
- let dmg=Math.max(0,Math.min(m.d|0,pvpCap(d,n,d.balR)));
+ const it=d.seq.at(n),ok=n===d.rDone+1;d.rChars+=it.rw.length;
+ let dmg=Math.max(0,Math.min(m.d|0,pvpCap(d,n,d.balR,false)));const rsp=it.rsp;
  if(!ok||d.rChars>(d.ft+2)*PVP.MAX_CPS){dmg=0;d.cheat++} // pulou palavra ou rápido demais para um humano
  d.rDone=Math.max(d.rDone,n);
  const by=BOT_POS.y+Math.sin(T*1.5)*4;
- if(ok&&it.sp==='gold'){d.bCap=Math.min(d.max,d.bCap+PVP.HEAL);floatTxt(BOT_POS.x+110,by-60,t('pvp.heal',{n:PVP.HEAL}),'#7dffbd',18);starBurst(BOT_POS.x,by-20,'#7dffbd',14,130,8)}
- if(ok&&it.sp==='shield'){d.rShield=true;let mx=pvpCap(d,d.cur,d.balMe);for(const h of d.hits)if(G.time-h[0]<3)mx=Math.max(mx,h[1]);d.bCap=Math.min(d.max,d.bCap+mx)} // o escudo pode pegar um golpe já em trânsito
+ if(ok&&rsp==='gold'){d.bCap=Math.min(d.max,d.bCap+PVP.HEAL);floatTxt(BOT_POS.x+110,by-60,t('pvp.heal',{n:PVP.HEAL}),'#7dffbd',18);starBurst(BOT_POS.x,by-20,'#7dffbd',14,130,8)}
+ if(ok&&rsp==='shield'){d.rShield=true;let mx=pvpCap(d,d.cur,d.balMe,true);for(const h of d.hits)if(G.time-h[0]<3)mx=Math.max(mx,h[1]);d.bCap=Math.min(d.max,d.bCap+mx)} // o escudo pode pegar um golpe já em trânsito
  // rs = reenvio após uma queda: o gelo daquele momento já passou
- if(ok&&it.sp==='ice'&&!m.rs){d.frozen=PVP.ICE;floatTxt(TX,TTOP-160,t('pvp.frozen'),'#aef0ff',26);snd(1760,.3,'sine',.05,440)}
+ if(ok&&rsp==='ice'&&!m.rs){d.frozen=PVP.ICE;floatTxt(TX,TTOP-160,t('pvp.frozen'),'#aef0ff',26);snd(1760,.3,'sine',.05,440)}
  if(d.shield&&dmg>0){d.shield=false;dmg=0;floatTxt(TX,TTOP-110,t('pvp.blocked'),'#7ad0ff',24);addRing(TX,TTOP-40,40,100,.45,'#7ad0ff');snd(520,.2,'triangle',.05,1040)}
- if(dmg>0||(ok&&it.sp==='crit'))pvpHitFx(dmg,it.sp);
+ if(dmg>0||(ok&&rsp==='crit'))pvpHitFx(dmg,rsp);
  d.php=Math.max(0,d.php-dmg);
  pvpSendHp();
  if(d.php<=0)pvpKo();
 }
 function pvpHitFx(dmg,sp){
  const d=G.duel,by=BOT_POS.y+Math.sin(T*1.5)*4,col=sp?PVP_SP[sp].col:d.L.color;
- addBeam(BOT_POS.x+30,by-60,TX,TTOP-40,col,.4,false);
+ const bg=botGem(by);addBeam(bg.x,bg.y,TX,TTOP-40,col,.4,false);
  burst(TX,TTOP-40,'#ff4a6a',22,220);addRing(TX,TTOP-40,8,70,.35,col);
- d.phit=.3;G.shake=sp==='crit'?.6:.35;G.flash=.3;G.flashCol='#ff2a4a';
+ d.phit=.3;d.batk=.35;G.shake=sp==='crit'?.6:.35;G.flash=.3;G.flashCol='#ff2a4a';
  floatTxt(TX+rand(100,150)*(Math.random()<.5?-1:1),TTOP-40,'-'+dmg,'#ff5a7a',sp==='crit'?32:24);snd(160,.3,'sawtooth',.06,60);
  if(sp==='crit')floatTxt(TX,TTOP-130,t('pvp.crit'),'#ff7a3a',24);
 }
 // mensagens da batalha (chamado pelo Net)
 function pvpData(m){
  const d=G&&G.duel;if(!d||!d.online||state!=='play')return;
- if(m.t==='prog'){const n=m.n|0;if(n<1||n>d.rDone+2)return;const it=d.seq.at(n),b=d.bot;b.word=b.nw=it.w;b.sp=it.sp;b.typed=Math.max(0,Math.min(it.w.length,m.ty|0));d.rwpm=Math.max(0,Math.min(400,m.wpm|0));d.rCur=n}
+ if(m.t==='prog'){const n=m.n|0;if(n<1||n>d.rDone+2)return;const it=d.seq.at(n),b=d.bot;b.word=b.nw=it.rw;b.sp=it.rsp;b.typed=Math.max(0,Math.min(it.rw.length,m.ty|0));d.rwpm=Math.max(0,Math.min(400,m.wpm|0));d.rCur=n}
  else if(m.t==='atk')pvpOnAtk(m);
  else if(m.t==='hp'){d.bRep=Math.max(0,Math.min(d.max,+m.v||0));d.bAck=Math.max(0,m.k|0);pvpRecalcB()}
 }
@@ -232,7 +239,7 @@ function pvpEnd(res,reason){
  const S=Net.series;if(S.me>=2||S.them>=2){S.me=S.them=S.draws=0}S[win?'me':draw?'draws':'them']++;
  profile.aura=(profile.aura||0)+aura;profile.totalWords+=G.words;profile.totalTime+=G.time;profile.totalCorrect+=G.correct;profile.totalErrors+=G.errors;
  const ups=addXp(xp);saveProfile();pvpRestore();document.body.classList.remove('in-online');
- d.mySum=pvpMySum();Net.send({t:'sum',s:d.mySum});
+ d.mySum=pvpMySum();Net.send({t:'sum',s:d.mySum});Net.last={res,a:d.mySum,b:d.sum}; // card "Última luta" do lobby
  (win?[523,659,784,1046,1318]:draw?[523,659,523,659]:[400,300,200,120]).forEach((f,i)=>snd(f,.3,'triangle',.06,0,i*.12));
  renderSide();renderProfile();
  showOnlineResult({res,reason,xp,aura,ups,before,rname:d.rname,rav:d.rav,rec:profile.online});
@@ -246,9 +253,9 @@ function showOnlineResult(r){
  <div class="pvpseries${done?' done':''}"><span>${t('pvp.series',{a:S.me,b:S.them})}${S.draws?' · 🤝 '+S.draws:''}</span>${done?`<b>${S.me>=2?t('pvp.seriesWin'):t('pvp.seriesLose')}</b>`:''}</div>
  <div id="pvpCmp" class="pvpcmp"></div>
  <div class="xpbox">${xpFooter(r.before)}${r.aura?`<div class="row"><span>✨ ${t('aura.name')}</span><b>+${r.aura}</b></div>`:''}</div><div id="lvSlot"></div><div class="rewards" id="rwSlot"></div>
- <div class="row2 pvpbtns"><button class="btn" id="pvpRm" onclick="pvpRematch()">⚔️ ${t('pvp.rematch')}</button><button class="btn ghost" onclick="Net.backToLobby()">🏰 ${t('pvp.lobby')}</button><button class="btn ghost" onclick="Net.leave();quitToMenu()">🏠 ${t('results.menu')}</button></div>
- <p class="pvprmst" id="pvpRmSt"></p>`,'over');
- pvpRenderCmp();pvpRmRender();
+ <div class="row2 pvpbtns"><button class="btn" id="pvpGo" onclick="Net.backToLobby()">🏰 ${t('pvp.lobby')}</button><button class="btn ghost" onclick="Net.leave();quitToMenu()">🏠 ${t('results.menu')}</button></div>
+ <p class="pvprmst">${t('pvp.lobbyHint')}</p>`,'over pvpover');
+ pvpRenderCmp();Net.autoLobby(8); // 🏰 volta ao lobby sozinho: lá os dois dizem se querem jogar de novo
  animateXp(r.before,r.xp,r.ups.flatMap(rewardsAt).filter(s=>!s.startsWith('🎁')));
 }
 function pvpRenderCmp(){
@@ -270,7 +277,7 @@ function pvpChart(a,b,rc){
   <polyline points="${pt(a)}" fill="none" stroke="#ffd98a" stroke-width="2.5" stroke-linejoin="round"/>${b.length>1?`<polyline points="${pt(b)}" fill="none" stroke="${HEX_COL.test(rc)?rc:'#ff7a5a'}" stroke-width="2.5" stroke-linejoin="round" stroke-dasharray="5 3"/>`:''}</svg>
   <div class="pc-leg"><i style="--c:#ffd98a"></i>${esc(nickOr())}<i style="--c:${HEX_COL.test(rc)?rc:'#ff7a5a'}"></i>${esc(G.duel.rname)}</div></div>`;
 }
-function pvpOnSum(s){if(!G||!G.duel||!G.duel.online)return;G.duel.sum=pvpCleanSum(s);if(state==='over')pvpRenderCmp()}
+function pvpOnSum(s){const c=pvpCleanSum(s);if(Net.last)Net.last.b=c;if(state!=='over'&&state!=='play')Net.render();if(!G||!G.duel||!G.duel.online)return;G.duel.sum=c;if(state==='over')pvpRenderCmp()}
 // revanche direta: os dois apertam → o anfitrião começa outra luta no mesmo modo (sem voltar ao lobby)
 function pvpRematch(){
  if(state!=='over'||!G||!G.duel||!G.duel.online)return;
@@ -294,7 +301,8 @@ function pvpBubble(c,x,y,txt){
 // palavra do rival: ícone do especial + barra de progresso dele
 function pvpRivalExtra(c,bx,bty,bwW,b,by){
  const d=G.duel,n=b.nw.length||1,p=Math.min(1,b.typed/n);
- if(b.sp){c.font='16px Nunito';c.textAlign='left';c.fillText(PVP_SP[b.sp].ic,bx-34,bty)}
+ if(b.sp){c.font='16px Nunito';c.textAlign='left';c.fillText(PVP_SP[b.sp].ic,bx-34,bty);
+  c.font='800 10.5px Nunito';c.textAlign='center';c.fillStyle=PVP_SP[b.sp].col;c.fillText(t('pvp.how.'+b.sp+'R'),BOT_POS.x,bty+28);c.textAlign='left'} // aviso: o que acontece se o rival completar
  c.fillStyle='rgba(0,0,0,.45)';c.fillRect(bx-10,bty+10,bwW+20,4);c.fillStyle=d.L.color;c.fillRect(bx-10,bty+10,(bwW+20)*p,4);
  if(b.typed>0&&b.typed<n){c.fillStyle='#ffd0d8';for(let i=0;i<3;i++){c.globalAlpha=.35+.65*Math.max(0,Math.sin(T*8-i*.9));c.beginPath();c.arc(bx+bwW+22+i*8,bty-5,2.4,0,6.283);c.fill()}c.globalAlpha=1}
 }
@@ -302,7 +310,7 @@ function pvpRivalExtra(c,bx,bty,bwW,b,by){
 function pvpWordExtra(c,wx,wy,ww,e){
  const d=G.duel;
  if(e.sp){const S=PVP_SP[e.sp],pu=1+.08*Math.sin(T*6);c.save();c.translate(wx-56,wy-12);c.scale(pu,pu);c.font='26px Nunito';c.textAlign='center';c.fillText(S.ic,0,9);c.restore();
-  c.font='900 12px Nunito';c.textAlign='center';c.fillStyle=S.col;c.fillText(t('pvp.sp.'+e.sp),TX,wy+30);c.textAlign='left'}
+  c.font='900 12px Nunito';c.textAlign='center';c.fillStyle=S.col;c.fillText(t('pvp.how.'+e.sp+'B'),TX,wy+30);c.textAlign='left'} // o que a palavra faz, não só o nome
  if(d.frozen>0){c.fillStyle='rgba(174,240,255,.42)';c.beginPath();c.roundRect(wx-22,wy-36,ww+44,48,12);c.fill();
   c.font='900 16px Nunito';c.textAlign='center';c.fillStyle='#e8fbff';c.fillText('❄️ '+d.frozen.toFixed(1)+'s',TX,wy+30);c.textAlign='left'}
 }
@@ -338,8 +346,12 @@ function pvpDrawHUD(c){
  if(d.cd<=0){c.font='800 11px Nunito';c.fillStyle=lead>0?'#7dffbd':lead<0?'#ff8a7a':'#c8d2f0';c.fillText((lead>0?'⚡ ':lead<0?'⚠️ ':'')+t('pvp.race',{a:d.cur,b:d.rCur}),TX,104)}
  if(d.sdOn){c.font='900 12px Nunito';c.fillStyle='#ff6a5a';c.fillText(t('pvp.sdMul',{m:pvpSdMul(d).toFixed(1)}),TX,120)}
  if(d.balMe>1||d.balR>1){c.font='800 10px Nunito';c.fillStyle='#9fb0e0';c.fillText(t('pvp.balOn'),TX,d.sdOn?134:120)}
- if(d.cd>0){c.font='800 13px Nunito';c.fillStyle='#e8ecff';c.fillText(PVP_SPK.map(k=>PVP_SP[k].ic+' '+t('pvp.sp.'+k)).join('   '),TX,H/2+20);
-  if(!DeviceManager.isTouch){c.font='700 11px Nunito';c.fillStyle='#9fb0e0';c.fillText(t('pvp.emoteHint'),TX,H/2+40)}}
+ if(d.cd>0){ // contagem: cola rápida das regras (uma por linha, com a cor do especial)
+  c.fillStyle='rgba(6,8,26,.78)';c.beginPath();c.roundRect(TX-240,H/2+2,480,PVP_SPK.length*19+50,12);c.fill();
+  c.font='900 12px Nunito';c.fillStyle='#ffd98a';c.fillText(fitTxt(c,t('pvp.how.intro'),460),TX,H/2+20);
+  PVP_SPK.forEach((k,i)=>{c.font='800 12px Nunito';c.fillStyle=PVP_SP[k].col;c.fillText(PVP_SP[k].ic+' '+t('pvp.how.'+k+'B'),TX,H/2+40+i*19)});
+  c.font='800 11px Nunito';c.fillStyle='#ffe14a';c.fillText(fitTxt(c,'⚡ '+t('pvp.how.firstD'),460),TX,H/2+42+PVP_SPK.length*19);
+  if(!DeviceManager.isTouch){c.font='700 11px Nunito';c.fillStyle='#9fb0e0';c.fillText(t('pvp.emoteHint'),TX,H/2+74+PVP_SPK.length*19)}}
  c.textAlign='center';
 }
 // ---------- emotes durante a luta: balões sobre os magos (teclas 1–4 ou a barra na tela) ----------

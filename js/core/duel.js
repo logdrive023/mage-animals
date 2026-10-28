@@ -6,6 +6,8 @@ const DUEL_HP=200; // vida de cada mago (≈ 20–40 s de duelo com digitação 
 const botCv=mkCanvas(140,140),botCx=botCv.getContext('2d');
 let botDrawT=0;
 
+// gema do cajado do rival na tela (o raio dele sai daí); sem sprite, o ponto antigo do desenho procedural
+function botGem(by){const g=typeof portraitGem==='function'&&G&&G.duel?portraitGem(G.duel.botCh.id):null;return g?{x:BOT_POS.x-77+g[0]*1.1,y:by-140+g[1]*1.1}:{x:BOT_POS.x+30,y:by-60}}
 function duelWord(){if(G.duel.online)return pvpWord();const L=G.duel.L,list=POOL[L.tiers[(Math.random()*L.tiers.length)|0]];return list[(Math.random()*list.length)|0]}
 
 function startDuel(li){
@@ -49,9 +51,9 @@ function playerAttack(){
 }
 function botAttack(){
  const d=G.duel,b=d.bot,dmg=Math.round(5+b.nw.length*1.3),by=BOT_POS.y+Math.sin(T*1.5)*4;
- addBeam(BOT_POS.x+30,by-60,TX,TTOP-40,d.L.color,.4,false);
+ const bg=botGem(by);addBeam(bg.x,bg.y,TX,TTOP-40,d.L.color,.4,false);
  burst(TX,TTOP-40,'#ff4a6a',22,220);addRing(TX,TTOP-40,8,70,.35,d.L.color);
- d.php=Math.max(0,d.php-dmg);d.phit=.3;G.shake=.35;G.flash=.3;G.flashCol='#ff2a4a';
+ d.php=Math.max(0,d.php-dmg);d.phit=.3;d.batk=.35;G.shake=.35;G.flash=.3;G.flashCol='#ff2a4a';
  floatTxt(TX+rand(100,150)*(Math.random()<.5?-1:1),TTOP-40,'-'+dmg,'#ff5a7a',24);snd(160,.3,'sawtooth',.06,60);
  if(d.php<=0)return duelEnd(false);
  nextBotWord();b.delay=rand(.15,.45);
@@ -59,7 +61,7 @@ function botAttack(){
 function duelUpdate(dt){
  const d=G.duel,b=d.bot;
  G.time+=dt;G.banner=Math.max(0,G.banner-dt);G.col=spellColor(G.ch);musicPerf(dt);
- d.phit=Math.max(0,d.phit-dt);d.bhit=Math.max(0,d.bhit-dt);
+ d.phit=Math.max(0,d.phit-dt);d.bhit=Math.max(0,d.bhit-dt);d.batk=Math.max(0,(d.batk||0)-dt);
  d.pShow+=(d.php-d.pShow)*Math.min(1,dt*6);d.bShow+=(d.bhp-d.bShow)*Math.min(1,dt*6);
  if(d.online){pvpUpdate(dt);if(state!=='play')return}
  else if(G.banner<=.3){
@@ -89,8 +91,10 @@ function drawDuel(c,col){
  c.fillStyle='#1a1430';c.beginPath();c.ellipse(BOT_POS.x,by+18,70,16,0,0,6.283);c.fill();
  c.fillStyle='#2a2246';c.beginPath();c.moveTo(BOT_POS.x-66,by+20);c.lineTo(BOT_POS.x-20,by+70);c.lineTo(BOT_POS.x+8,by+52);c.lineTo(BOT_POS.x+30,by+82);c.lineTo(BOT_POS.x+66,by+20);c.fill();
  c.fillStyle='#3a3060';c.beginPath();c.ellipse(BOT_POS.x,by+14,66,12,0,0,6.283);c.fill();
- if(botDrawT<0||T-botDrawT>1/24||botDrawT>T){botDrawT=T;drawAvatar(botCx,d.botCh,T,false)} // retrato do bot a 24 FPS
- c.drawImage(botCv,BOT_POS.x-77,by-140,154,154);
+ if(botDrawT<0||T-botDrawT>1/24||botDrawT>T){botDrawT=T;(typeof drawCharPortrait==='function'?drawCharPortrait:drawAvatar)(botCx,d.botCh,T,false)} // retrato do rival a 24 FPS: sprite oficial do mago dele
+ // 🎭 reações: golpe recebido = tranco para trás e tremida · ataque dele = avança e cresce um pouco
+ const hk=d.bhit/.3,ak=Math.max(0,d.batk||0)/.35,jx=hk*Math.sin(T*70)*6,sz=154*(1+ak*.12),lift=ak*10-hk*4;
+ c.drawImage(botCv,BOT_POS.x-sz/2+jx,by-140-lift-(sz-154),sz,sz);
  if(d.bhit>0){c.globalCompositeOperation='lighter';c.globalAlpha=d.bhit*2.5;c.drawImage(glowSprite('#ff3a3a'),BOT_POS.x-70,by-130,140,140);c.globalAlpha=1;c.globalCompositeOperation='source-over'}
  // palavra do bot (com progresso) acima dele
  const b=d.bot,dtx=(w,a,z)=>G.runes?runeGlyphs(w.slice(a,z)):w.slice(a,z).toUpperCase(),bw=dtx(b.word,0);c.font='800 '+(d.online?18:15)+'px Nunito';const bwW=G.runes?b.word.length*14+(b.word.length-1)*6.3:c.measureText(bw).width,bx=(BOT_POS.x-bwW/2)|0,bty=(by-150)|0;

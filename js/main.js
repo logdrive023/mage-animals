@@ -9,6 +9,7 @@ window.addEventListener('keydown',ev=>{
  if(ev.key==='F2'){ev.preventDefault();toggleMusic();return}
  if(ChestUI.open){if(ev.key==='Escape'||ev.key==='Enter'){ev.preventDefault();if(ChestUI.done)ChestUI.collect(false);else ChestUI.skip()}return} // abertura de baús por cima de tudo
  if(openSheetSide&&ev.key==='Escape'){closeSheets();return}
+ if(modalOpen&&modal.kind==='online'&&Net.state==='lobby'&&ev.key==='Enter'&&ev.target.tagName!=='INPUT'&&ev.target.tagName!=='BUTTON'){ev.preventDefault();Net.toggleReady();return} // ⚔️ lobby: Enter = pronto / jogar de novo
  if(modalOpen){if(ev.key==='Escape'||(ev.key==='Enter'&&ev.target.tagName!=='BUTTON')){ev.preventDefault();closeModal()}return}
  if(ev.ctrlKey||ev.altKey||ev.metaKey)return;
  const k=ev.key;
@@ -16,7 +17,7 @@ window.addEventListener('keydown',ev=>{
   const online=state==='over'&&G&&G.duel&&G.duel.online;
   // Enter também lança a Arcana na partida: se o jogador estava apertando na hora da derrota, não reinicia sem querer
   if(k==='Enter'&&state==='over'&&G&&G.overAt&&performance.now()-G.overAt<400){ev.preventDefault();return}
-  if(k==='Enter'){ev.preventDefault();if(state==='paused')resume();else if(online)pvpRematch();else if(state==='over'&&G&&G.mode==='duel')startDuel(G.duel.li);else playAgain()} // fim do desafio do dia → repete o desafio
+  if(k==='Enter'){ev.preventDefault();if(state==='paused')resume();else if(online)Net.backToLobby();else if(state==='over'&&G&&G.mode==='duel')startDuel(G.duel.li);else playAgain()} // fim do desafio do dia → repete o desafio
   else if(k==='Escape'&&state==='paused')resume();
   else if(k==='Escape'&&state==='over'){if(online)Net.leave();quitToMenu()} // fim de jogo: ESC = voltar ao menu (atalho mostrado na tela)
   else if(state==='paused'&&(k==='r'||k==='R')){ev.preventDefault();restartMatch()}

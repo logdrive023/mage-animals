@@ -12,7 +12,7 @@
 //  sum{s}        meus números no fim (comparação) · rematch{v}  quero revanche direta
 'use strict';
 
-const PEER_PREFIX='mage-animals-v1-';
+const PEER_PREFIX='mage-animals-v2-'; // v2: palavras diferentes por jogador (versões diferentes não se encontram)
 const PEER_LIBS=['https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js','https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js'];
 const ONLINE_MODES=[['words','⌨️'],['letters','✍️'],['runes','🔮']];
 const EMOTES=['bora','luck','wait','gg'];
@@ -111,10 +111,12 @@ const Net={
    case'sum':if(typeof pvpOnSum==='function')pvpOnSum(d.s);break;
    case'full':this.set('error','full');break;
    case'mode':this.mode=ONLINE_MODES.some(m=>m[0]===d.m)?d.m:'words';this.render();break;
-   case'ready':if(this.remote){this.remote.ready=!!d.v;this.render();snd(d.v?988:520,.08,'triangle',.04)}break;
+   case'ready':if(this.remote){this.remote.ready=!!d.v;this.checkGo();this.render();snd(d.v?988:520,.08,'triangle',.04)}break;
    case'emote':this.bubble('them',d.i);break;
    case'start':if(this.role==='guest'){this.resumeTok=String(d.tok||'').slice(0,40);startOnlineDuel({mode:d.m,seed:d.seed,lang:d.lang,bal:d.bal!==false})}break;
-   case'lobby':this.resumeTok='';if(this.remote)this.remote.ready=false;this.ready=false;this.rematch.them=false;if(state==='over'&&typeof pvpRmRender==='function')pvpRmRender();else if(state!=='play')this.render();break;
+   // o rival chegou ao lobby (ainda não pronto). Se eu já estava lá, mantenho o meu "pronto" e reaviso
+   case'lobby':this.resumeTok='';if(this.remote)this.remote.ready=false;this.rematch.them=false;this.goStop();
+    if(state==='over'||state==='play'){this.ready=false;if(typeof pvpRmRender==='function')pvpRmRender()}else{this.send({t:'ready',v:this.ready});this.render()}break;
    case'sync':if(typeof pvpOnSync==='function')pvpOnSync(d.ack);break;
    case'bye':this._bye=true;this.onClose();break; // saída de propósito: sem esperar reconexão
    case'ping':break;
@@ -158,9 +160,26 @@ const Net={
  },
  // ---------- lobby ----------
  setMode(m){if(this.role!=='host')return;this.mode=m;this.send({t:'mode',m});this.render();snd(660,.06,'triangle',.04)},
- toggleReady(){this.ready=!this.ready;this.send({t:'ready',v:this.ready});this.render();snd(this.ready?988:520,.08,'triangle',.04)},
- canStart(){return this.role==='host'&&!!this.remote&&this.remote.ready&&!!(this.conn&&this.conn.open)},
+ toggleReady(){if(this.state!=='lobby'||!this.remote)return;this.ready=!this.ready;this.send({t:'ready',v:this.ready});this.checkGo();this.render();snd(this.ready?988:520,.08,'triangle',.04)},
+ canStart(){return this.role==='host'&&!!this.remote&&this.remote.ready&&this.ready&&!!(this.conn&&this.conn.open)},
  start(){if(!this.canStart())return;this.startMatch()},
+ // ⚔️ os DOIS marcaram "pronto" → contagem de 3 s na tela dos dois; o anfitrião começa a luta no fim (desmarcar cancela)
+ goAt:0,_go:0,
+ checkGo(){
+  const both=this.state==='lobby'&&this.ready&&!!this.remote&&this.remote.ready;
+  if(!both){if(this.goAt){this.goStop();this.render()}return}
+  if(this.goAt)return;this.goAt=Date.now()+3000;snd(784,.1,'triangle',.05);
+  this._go=setInterval(()=>{const left=this.goAt-Date.now(),el=$('olGo');
+   if(el)el.textContent=t('online.goIn',{s:Math.max(1,Math.ceil(left/1000))});
+   if(left<=0){this.goStop();if(this.canStart())this.startMatch()}},200);
+ },
+ goStop(){clearInterval(this._go);this._go=0;this.goAt=0},
+ // 🏰 fim da luta → lobby sozinho (o resultado fica no card "Última luta"); o botão leva na hora
+ last:null,_auto:0,
+ autoLobby(sec){
+  clearInterval(this._auto);let s=sec;const upd=()=>{const b=$('pvpGo');if(b)b.textContent='🏰 '+t('pvp.lobbyIn',{s})};upd();
+  this._auto=setInterval(()=>{if(state!=='over'||!G||!G.duel||!G.duel.online){clearInterval(this._auto);return}if(--s<=0){clearInterval(this._auto);this.backToLobby()}else upd()},1000);
+ },
  /** começa a luta (lobby ou revanche direta): mesma semente e mesmas regras nos dois lados */
  startMatch(){if(this.role!=='host'||!(this.conn&&this.conn.open))return;const seed=(Math.random()*2**31)|0;
   this.resumeTok=Math.random().toString(36).slice(2)+Date.now().toString(36);
@@ -170,14 +189,14 @@ const Net={
  bubble(who,i){if(!EMOTES[i])return;this.bubbles[who]=t('online.emote.'+EMOTES[i]);clearTimeout(this._bt[who]);
   this._bt[who]=setTimeout(()=>{this.bubbles[who]='';if(state!=='play')this.render()},2600);
   if(state==='play'&&typeof pvpEmote==='function')pvpEmote(who,this.bubbles[who]);else this.render();snd(1200,.05,'triangle',.03)},
- backToLobby(){this.ready=false;this.resumeTok='';this.stopResume();this.rematch={me:false,them:false};if(this.remote)this.remote.ready=false;this.send({t:'lobby'});showMenu();openModal('online')},
+ backToLobby(){clearInterval(this._auto);this.goStop();this.ready=false;this.resumeTok='';this.stopResume();this.rematch={me:false,them:false};if(this.remote)this.remote.ready=false;this.send({t:'lobby'});showMenu();openModal('online')},
  // ---------- saída ----------
  autoCopy:false,inviteHandle:'',invited:'',
  reset(keepState){
   clearTimeout(this._to);clearInterval(this._hb);try{if(this.conn)this.conn.close()}catch(_){}try{if(this.peer)this.peer.destroy()}catch(_){}
   this.conn=this.peer=null;this.remote=null;this.invited='';this.ready=false;this.code='';this.role=null;this.bubbles={me:'',them:''};
   this.series={me:0,them:0,draws:0};this.rematch={me:false,them:false};this.bal=true;
-  this.stopResume();this.resumeTok='';this._bye=false;this._joined=false;
+  this.stopResume();this.resumeTok='';this._bye=false;this._joined=false;clearInterval(this._auto);this.goStop();this.last=null;
   if(!keepState){this.state='idle';this.err=''}
  },
  leave(){this.send({t:'bye'});this.invitee='';this.reset();this.render()},
@@ -198,9 +217,25 @@ const Net={
 function onlineJoinFromInput(){const c=$('olCode');Net.joinDraft=c?c.value:'';Net.join(Net.joinDraft)}
 function mageCard(p,who,status){
  const base=CHARS.find(c=>c.id===p.ch)||CHARS[0],b=Net.bubbles[who];
- return`<div class="olcard ${who}"><div class="olav" style="--c:${HEX_COL.test(p.color||'')?p.color:base.color}"><span>${base.emoji}</span></div>
+ const img=typeof charPortraitURL==='function'?charPortraitURL(base):''; // retrato do sprite oficial do mago de cada um
+ return`<div class="olcard ${who}${p.ready||who==='me'&&Net.ready?' rdy':''}"><div class="olav${img?' img':''}" style="--c:${HEX_COL.test(p.color||'')?p.color:base.color}">${img?`<img src="${img}" alt="">`:`<span>${base.emoji}</span>`}</div>
   <b class="olnick">${esc(p.av||'')} ${esc(p.nick||'?')}</b>${p.handle?`<i class="olhandle">${esc(p.handle)}</i>`:''}<small>${t('ui.lvl')} ${(p.lvl|0)||1} ·${charName(base)}${p.touch?' · 📱':''}</small>
   <span class="olst ${status.cls}">${status.txt}</span>${b?`<i class="olbubble">${esc(b)}</i>`:''}</div>`;
+}
+// card "Última luta" no lobby: resultado, série e os números dos dois (o resumo do rival chega pela rede e atualiza)
+function lastMatchHTML(){
+ const L=Net.last;if(!L)return'';const a=L.a||{},b=L.b,S=Net.series;
+ const cell=(x,y,k,suf)=>`<b class="${y!=null&&x>y?'lead':''}">${x==null?'…':x+(suf||'')}</b>`;
+ const row=(lab,k,suf)=>`<div class="lm-row">${cell(a[k],b?b[k]:null,k,suf)}<span>${lab}</span>${cell(b?b[k]:null,a[k],k,suf)}</div>`;
+ return`<div class="lastmatch ${L.res}"><div class="lm-top"><b>${L.res==='win'?'🏆 '+t('duel.victory'):L.res==='draw'?'🤝 '+t('pvp.drawTitle'):'💀 '+t('duel.defeat')}</b><small>${t('pvp.series',{a:S.me,b:S.them})}${S.draws?' · 🤝 '+S.draws:''}</small></div>
+  ${row('WPM','wpm')}${row(t('hud.precision'),'acc','%')}${row(t('stats.words'),'words')}</div>`;
+}
+// 📖 "Como funciona a batalha": cada regra com ícone, nome e o que faz (antes era uma linha de ícones sem explicação)
+function pvpHowHTML(){
+ const it=(ic,col,k)=>`<div class="hw-it" style="--c:${col}"><i>${ic}</i><b>${t('pvp.how.'+k)}</b><small>${t('pvp.how.'+k+'D')}</small></div>`;
+ return`<details class="olhow" ${store.get('pvpHowSeen',0)?'':'open'} ontoggle="if(!this.open)store.set('pvpHowSeen',1)"><summary>📖 ${t('pvp.how.title')}</summary>
+  <p class="hw-intro">${t('pvp.how.intro')}</p>
+  <div class="hw-grid">${PVP_SPK.map(k=>it(PVP_SP[k].ic,PVP_SP[k].col,k)).join('')}${it('⚡','#ffe14a','first')}${it('🔥','#ffb04a','combo')}${it('☠️','#ff6a5a','sd')}</div></details>`;
 }
 function tabOnline(){
  const N=Net,st=N.state;
@@ -215,20 +250,22 @@ function tabOnline(){
   <button class="btn ghost sm" onclick="Net.leave()">${t('online.closeRoom')}</button></div>`;
  if(st==='lobby'&&N.remote){
   const host=N.role==='host',me=N.me(),hostP=host?me:N.remote,guestP=host?N.remote:me;
-  const guestReady=host?N.remote.ready:N.ready;
-  const stHost={cls:'ok',txt:'👑 '+t('online.host')+' · '+t('online.readyTag')},stGuest=guestReady?{cls:'ok',txt:t('online.readyTag')}:{cls:'wait',txt:t('online.waitingTag')};
+  const guestReady=host?N.remote.ready:N.ready,hostReady=host?N.ready:N.remote.ready;
+  const tag=r=>r?{cls:'ok',txt:t('online.readyTag')}:{cls:'wait',txt:t('online.waitingTag')};
+  const stHost=Object.assign(tag(hostReady),{txt:'👑 '+tag(hostReady).txt}),stGuest=tag(guestReady);
   const modes=ONLINE_MODES.map(([m,ic])=>`<button class="olmode ${N.mode===m?'on':''}" ${host?`onclick="Net.setMode('${m}')"`:'disabled'}>${ic} <b>${t('online.mode.'+m)}</b><small>${t('online.modeSub.'+m)}</small></button>`).join('');
   return`<div class="ollobby" id="online-modal">
+   ${lastMatchHTML()}
    <div class="olplayers">${mageCard(hostP,host?'me':'them',stHost)}<div class="olvs">VS</div>${mageCard(guestP,host?'them':'me',stGuest)}</div>
+   ${N.goAt?`<p class="olgo" id="olGo">${t('online.goIn',{s:Math.max(1,Math.ceil((N.goAt-Date.now())/1000))})}</p>`:''}
+   <div class="olact"><button class="btn ${N.ready?'ghost':'pulse'}" onclick="Net.toggleReady()">${N.ready?'✋ '+t('online.notReady'):'⚔️ '+t(N.last?'online.again':'online.imReady')}</button>${N.ready&&!N.remote.ready?`<small>${t('online.waitRival')}</small>`:''}</div>
    <h4>${t('online.chooseMode')}${host?'':` <small>(${t('online.hostChooses')})</small>`}</h4><div class="olmodes">${modes}</div>
    ${N.mode==='runes'&&!(me.touch&&N.remote.touch)?`<p class="olnote">📱 ${t('online.runesTouch')}</p>`:''}
    <div class="olbal"><button class="olbaltg ${N.bal?'on':''}" ${host?'onclick="Net.toggleBal()"':'disabled'} aria-pressed="${N.bal}"><i></i>${t('pvp.bal')}</button><small>${!!me.touch!==!!N.remote.touch?t('pvp.balSub'):t('pvp.balSame')}</small></div>
-   ${N.series.me+N.series.them+N.series.draws?`<p class="pvpseries">${t('pvp.series',{a:N.series.me,b:N.series.them})}${N.series.draws?' · 🤝 '+N.series.draws:''}</p>`:''}
-   <p class="msub center">✨ ${PVP_SPK.map(k=>PVP_SP[k].ic+' '+t('pvp.sp.'+k)).join(' · ')} · ⚡ ${t('pvp.firstShort')} · ☠️ ${t('pvp.sdShort')}</p>
+   ${!N.last&&N.series.me+N.series.them+N.series.draws?`<p class="pvpseries">${t('pvp.series',{a:N.series.me,b:N.series.them})}${N.series.draws?' · 🤝 '+N.series.draws:''}</p>`:''}
+   ${pvpHowHTML()}
    <div class="olemotes">${EMOTES.map((e,i)=>`<button onclick="Net.emote(${i})">${t('online.emote.'+e)}</button>`).join('')}</div>
-   <div class="olact">${host?`<button class="btn ${N.canStart()?'':'off'}" ${N.canStart()?'':'disabled'} onclick="Net.start()">⚔️ ${t('online.start')}</button>${N.canStart()?'':`<small>${t('online.waitReady')}</small>`}`
-    :`<button class="btn ${N.ready?'ghost':''}" onclick="Net.toggleReady()">${N.ready?'✋ '+t('online.notReady'):'✅ '+t('online.imReady')}</button>`}
-    <button class="btn ghost sm" onclick="Net.leave()">🚪 ${t('online.leave')}</button></div>
+   <div class="olact"><button class="btn ghost sm" onclick="Net.leave()">🚪 ${t('online.leave')}</button></div>
    <p class="msub center">${t('online.roomCode')}: <b class="gold">${N.code}</b></p></div>`;
  }
  // início: criar ou entrar
