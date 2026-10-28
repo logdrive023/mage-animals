@@ -264,7 +264,14 @@ const Rhythm={
   try{await ytLoad()}catch(e){this.fail('song.err.net');return}
   if(this.track!==tr)return; // trocou de faixa enquanto carregava
   const dock=songDock(true);dock.innerHTML='<div id="ytPlayer"></div>';songDockAd(true); // até a música começar o vídeo aceita clique: anúncio antes da música → "Pular"
-  setTimeout(()=>{if(this.track===tr&&this.needBegin){const o=document.querySelector('#overlay .songload small');if(o)o.textContent=t('song.adWait')}},3500);
+  // 📱 iPhone/Safari só toca vídeo com som depois de um TOQUE (o do menu se perde nas esperas acima): se em 2,5 s não começou,
+  //  aparece o botão "Tocar" (o toque chama playVideo) e o vídeo sobe por cima da tela escura para dar para tocar nele também
+  setTimeout(()=>{if(this.track!==tr||!this.needBegin)return;let st=-1;try{st=this.yt&&this.yt.getPlayerState()}catch(e){}
+   const box=document.querySelector('#overlay .songload');if(!box)return;
+   if(st===1||st===3){const o=box.querySelector('small');if(o)o.textContent=t('song.adWait');return} // tocando (anúncio) ou carregando: só a dica do "Pular"
+   box.querySelector('small').textContent=t(DeviceManager.isTouch?'song.tapHintT':'song.tapHint');
+   const dk=document.getElementById('songDock');if(dk)dk.dataset.tip='▶ '+t('song.tapPlay'); // o rótulo do vídeo também chama para o toque (volta ao do anúncio quando a partida abre)
+   if(!box.querySelector('.songtap'))box.insertAdjacentHTML('beforeend',`<button class="btn songtap" onclick="Rhythm.tapPlay()">▶ ${t('song.tapPlay')}</button>`)},2500);
   this.yt=new YT.Player('ytPlayer',{width:'100%',height:'100%',videoId:tr.vid,
    playerVars:{autoplay:0,controls:0,disablekb:1,fs:0,rel:0,playsinline:1,iv_load_policy:3,origin:location.origin},
    events:{
@@ -286,6 +293,12 @@ const Rhythm={
   if(typeof musicMix==='function')musicMix();
   songSideShow(true);songDock(this.track.src==='yt'); // painel da música primeiro: o vídeo se encaixa no espaço dele
   songDockAd(false);songRefocus();
+ },
+ /** ▶ toque do jogador: libera o som no iPhone (o playVideo vai dentro do gesto) */
+ tapPlay(){
+  if(!this.yt||!this.needBegin)return;try{this.yt.unMute();this.yt.playVideo()}catch(e){}
+  const b=document.querySelector('#overlay .songtap');if(b){b.disabled=true;b.textContent='🎵 '+t('song.loading')}
+  setTimeout(()=>{const x=document.querySelector('#overlay .songtap');if(x&&this.needBegin){x.disabled=false;x.textContent='▶ '+t('song.tapPlay')}},2500); // não começou: dá para tentar de novo (ou tocar no vídeo)
  },
  fail(key){
   this.stop();hideOverlay();if(state!=='menu')showMenu();

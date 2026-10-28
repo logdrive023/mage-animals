@@ -2286,3 +2286,7 @@ i18nExtend({'pt-BR':{pvp:{how:{title:'Como funciona a batalha',intro:'Às vezes 
   first:'¡Primero!',firstD:'Quien completa la palabra del mismo número antes que el rival hace +30% de daño.',
   combo:'Combo',comboD:'Cada palabra seguida sin errores suma +6% de daño (hasta 10).',
   sd:'Muerte súbita',sdD:'Después de 60 s, el daño de todos sube 10% cada 10 s.'}}}});
+// 📱 iPhone: o vídeo só começa com um toque
+i18nExtend({'pt-BR':{song:{tapPlay:'Tocar a música',tapHint:'O navegador pediu um clique para liberar o som: clique em “Tocar a música” (ou no vídeo).',tapHintT:'Seu celular pede um toque para liberar o som: toque em “Tocar a música” (ou no vídeo).'}},
+ en:{song:{tapPlay:'Play the song',tapHint:'The browser needs a click to allow sound: click “Play the song” (or the video).',tapHintT:'Your phone needs a tap to allow sound: tap “Play the song” (or the video).'}},
+ es:{song:{tapPlay:'Tocar la canción',tapHint:'El navegador pide un clic para activar el sonido: pulsa “Tocar la canción” (o el video).',tapHintT:'Tu móvil pide un toque para activar el sonido: toca “Tocar la canción” (o el video).'}}});

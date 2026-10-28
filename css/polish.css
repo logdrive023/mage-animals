@@ -335,3 +335,6 @@ body.song-mode .songside{display:flex;flex-direction:column;gap:10px;padding-top
 @media (max-height:760px){.overlay.pvpover{justify-content:flex-start;padding-top:12px}.overlay.pvpover .pc-chart{margin-top:2px}.overlay.pvpover .pvpseries{margin:0}}
 .overlay.pvpover{background:radial-gradient(ellipse at 50% 0%,#141a44,#05081a 70%)}
 .overlay.pvpover .pvpbtns .btn{flex:0 0 auto;min-width:150px}
+/* 📱 vídeo esperando toque/anúncio fica POR CIMA da tela de carregamento (no celular ela é fixa, z-index 50) */
+.songdock.ad{z-index:60}
+.songload .songtap{margin-top:6px;font-size:18px;padding:12px 28px;animation:olGo .7s ease-in-out infinite alternate}
