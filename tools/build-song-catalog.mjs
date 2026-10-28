@@ -9,6 +9,7 @@
 //
 // Lista: tools/song-catalog-list.json → [{"vid":"id de 11 letras ou link","tag":"pop","title":"opcional"}]. Um pedido a cada 4 s.
 // tag: pop · rock · latino · brasil · classic · eletro (os filtros do seletor). Música fora da lista sai do catálogo.
+// Depois: node tools/match-lyrics.mjs (liga a letra sincronizada do LRCLIB às músicas novas; o --all daqui apaga essas ligações).
 import { readFileSync, writeFileSync, existsSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -62,7 +63,7 @@ const all = process.argv.includes('--all');
 const cat = all ? [] : loadCatalog();
 const have = new Set(cat.map(x => x.vid));
 const order = list.map(x => idOf(x.vid)).filter(Boolean);
-let first = true;
+let first = true, blockedRun = 0;
 for (const item of list) {
   const vid = idOf(item.vid);
   if (!vid) { console.log('✕ link inválido:', item.vid); continue; }
@@ -72,7 +73,10 @@ for (const item of list) {
   const m = await meta(vid);
   if (!m.embed) { console.log(`✕ ${vid}: o vídeo não pode tocar fora do YouTube (oEmbed ${m.status})`); continue; }
   const res = await getCaptions(vid, 'pt');
-  if (!res.ok) { console.log(`✕ ${vid} ${m.title}: sem legenda (${res.error}) ${(res.debug || []).join(' ')}`); if (res.error === 'blocked') break; continue; }
+  if (!res.ok) { // 3 bloqueios seguidos = o YouTube desconfiou deste computador: para (insistir só piora)
+    console.log(`✕ ${vid} ${m.title}: sem legenda (${res.error}) ${(res.debug || []).join(' ')}`);
+    blockedRun = res.error === 'blocked' ? blockedRun + 1 : 0; if (blockedRun >= 3) { console.log('⛔ bloqueado pelo YouTube: tente de novo mais tarde'); break; } continue; }
+  blockedRun = 0;
   const g = timings(res.lines);
   if (g.length < MIN_PHRASES) { console.log(`✕ ${vid} ${m.title}: só ${g.length} frases`); continue; }
   cat.push({ id: 'cat-' + vid, vid, title: m.title, artist: m.artist, lang: String(res.lang || '').slice(0, 2), kind: res.kind, tag: item.tag || '', g });

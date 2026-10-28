@@ -453,4 +453,6 @@ body:not(.is-mobile) .adv-card .adv-check{top:50%;right:8px;transform:translateY
 .songcard.cat .songtx b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .songcard.cat .songtx{min-width:0;flex:1}
 .catres{font:900 12px Nunito,sans-serif;font-style:normal;color:var(--txt-dim);padding:3px 8px;border-radius:999px;background:rgba(255,255,255,.06)}
-.catres.win{color:#ffe9a8;background:rgba(255,215,120,.14)}
+.catres.win{color:#ffe9a8;background:rgba(255,215,120,.14)}.sslyr .ssfake{margin:0 0 8px;padding:6px 10px;border-radius:10px;font:800 11.5px/1.35 Nunito,sans-serif;color:#ffe9a8;background:rgba(255,215,120,.1);border:1px dashed rgba(255,215,120,.35)}/* 🎤 karaokê: a frase da vez se preenche de dourado no tempo do canto */
+.ssl.cur .kar{--k:0%;background:linear-gradient(90deg,#ffd98a var(--k),#fff var(--k));-webkit-background-clip:text;background-clip:text;color:transparent;transition:--k .25s linear}
+@property --k{syntax:'<percentage>';inherits:false;initial-value:0%}

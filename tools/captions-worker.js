@@ -2,6 +2,7 @@
 // O jogo roda no navegador e o YouTube bloqueia pedidos de outros sites (CORS). Este Worker busca as legendas
 // do vídeo do lado do servidor e devolve só os tempos e o texto, em JSON, com os cabeçalhos que liberam o jogo.
 //
+//   GET https://SEU-WORKER.workers.dev/?lrc=<id do LRCLIB>  → {ok:true, id, syncedLyrics} (cache de 30 dias)
 //   GET https://SEU-WORKER.workers.dev/?v=<id do vídeo>&lang=pt
 //   → {ok:true, lang:"pt", kind:"manual"|"auto", lines:[{t:12.4, end:15.1, text:"..."}]}
 //   → {ok:false, error:"no_captions"|"bad_id"|"fetch_failed"}
@@ -32,6 +33,26 @@ export default {
     if (allowed.length && !allowOrigin) return json({ ok: false, error: 'origin_not_allowed' }, 403, cors);
 
     const url = new URL(request.url);
+    // 🎤 ?lrc=<id>: letra sincronizada do LRCLIB (Músicas prontas), guardada 30 dias no cache — o LRCLIB é perguntado uma
+    //  vez por música para TODOS os jogadores (ele responde 503 quando está cheio; aqui tenta até 5 vezes)
+    const lrc = url.searchParams.get('lrc') || '';
+    if (lrc) {
+      if (!/^\d{1,12}$/.test(lrc)) return json({ ok: false, error: 'bad_id' }, 400, cors);
+      const key = new Request(`https://captions.cache/lrc/${lrc}`), hitL = await caches.default.match(key);
+      const jh = { ...cors, 'Content-Type': 'application/json; charset=utf-8' };
+      if (hitL) return new Response(hitL.body, { status: 200, headers: { ...jh, 'X-Cache': 'HIT' } });
+      for (let k = 0; k < 5; k++) {
+        const r = await fetch(`https://lrclib.net/api/get/${lrc}`, { headers: { 'User-Agent': 'MageAnimals (https://logdrive023.github.io/mage-animals/)' } });
+        if (r.ok) {
+          const j = await r.json(), body = JSON.stringify({ ok: true, id: j.id, syncedLyrics: j.syncedLyrics || '' });
+          ctx.waitUntil(caches.default.put(key, new Response(body, { headers: { 'Cache-Control': `max-age=${30 * 86400}` } })));
+          return new Response(body, { status: 200, headers: { ...jh, 'X-Cache': 'MISS' } });
+        }
+        if (r.status < 500) return json({ ok: false, error: 'not_found' }, 404, cors);
+        await new Promise(z => setTimeout(z, 1000));
+      }
+      return json({ ok: false, error: 'busy' }, 503, cors);
+    }
     const vid = url.searchParams.get('v') || '';
     const lang = (url.searchParams.get('lang') || 'pt').slice(0, 5).toLowerCase();
     if (!/^[\w-]{11}$/.test(vid)) return json({ ok: false, error: 'bad_id' }, 400, cors);
@@ -183,7 +204,8 @@ async function getCaptions(vid, lang) {
     }
   }
   // bloqueio = todas as fontes recusaram (login exigido / 429 / erro), em vez de "o vídeo simplesmente não tem legenda"
-  const blocked = !found && dbg.length > 0 && dbg.every(d => /LOGIN_REQUIRED|:429|:err|:403/.test(d));
+  // (os clientes de app pedindo login = o YouTube desconfiou do servidor; a página e o embed então vêm sem faixas)
+  const blocked = !found && dbg.length > 0 && (dbg.some(d => /LOGIN_REQUIRED/.test(d)) || dbg.every(d => /:429|:err|:403/.test(d)));
   return { ok: false, error: blocked ? 'blocked' : found ? 'empty_track' : 'no_captions', debug: dbg };
 }
 

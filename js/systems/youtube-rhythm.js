@@ -28,7 +28,7 @@ const SONG_CAT_TAGS=['pop','rock','latino','brasil','classic','eletro'];
 const SONG_CAT_TIERS={easy:['e'],normal:['s','m'],full:['m','m','l']};
 let _songCat=null,songCatTag='';
 function songCatalog(){
- if(!_songCat)_songCat=(typeof SONG_CATALOG!=='undefined'?SONG_CATALOG:[]).map(x=>({id:x.id,src:'yt',vid:x.vid,title:x.title,tag:x.tag,cat:true,g:x.g,bpm:100,chart:[],lines:[]}));
+ if(!_songCat)_songCat=(typeof SONG_CATALOG!=='undefined'?SONG_CATALOG:[]).map(x=>({id:x.id,src:'yt',vid:x.vid,title:x.title,tag:x.tag,lang:x.lang,lrc:x.lrc||null,cat:true,g:x.g,bpm:100,chart:[],lines:[]}));
  return _songCat;
 }
 /** frases do catálogo → linhas {t,end,text}: 1 palavra do jogo a cada 3 cantadas (1 a 4); o refrão repete as palavras da 1ª vez */
@@ -42,6 +42,36 @@ function songCatalogLines(tr){
   out.push({t:r[0],end:r[0]+r[1],text:ws.join(' ')});
  }
  return out;
+}
+/** 🎤 letra sincronizada da música pronta: o navegador do jogador baixa do LRCLIB (lrclib.net, CORS aberto, sem chave) e aplica
+ *  o ajuste de sincronia com o VÍDEO calculado por tools/match-lyrics.mjs (lrc.segs = [[a partir da linha i, ajuste s]]).
+ *  As linhas contam igual ao script: só as que têm alguma letra, na ordem do arquivo. Devolve [] se falhar (máx. 9 s).
+ *  1º pelo servidor de legendas (?lrc=, guarda 30 dias para todos os jogadores); senão direto no LRCLIB, que responde 503
+ *  "tente em 1 s" quando está cheio: até 4 tentativas, 1,2 s entre elas. */
+async function songLrcLines(tr){
+ const ctl=typeof AbortController!=='undefined'?new AbortController():null,timer=setTimeout(()=>ctl&&ctl.abort(),9000),sig=ctl?ctl.signal:undefined;
+ try{let j=null;const api=songCaptionsApi();
+  if(api)try{const r=await fetch(api+'/?lrc='+tr.lrc.id,{signal:sig});if(r.ok){const x=await r.json();if(x&&x.ok&&x.syncedLyrics)j=x}}catch(e){if(sig&&sig.aborted)return[]}
+  for(let k=0;!j&&k<4;k++){const r=await fetch('https://lrclib.net/api/get/'+tr.lrc.id,{signal:sig});if(r.ok){j=await r.json();break}if(r.status<500)break;await new Promise(z=>setTimeout(z,1200))}
+  if(!j)return[];const out=[];let i=0,si=0;const S=tr.lrc.segs;
+  for(const raw of String(j.syncedLyrics||'').split('\n')){const m=raw.match(/^\[(\d+):(\d+(?:\.\d+)?)\]\s*(.*)$/);if(!m||!/\p{L}/u.test(m[3]))continue;
+   while(si+1<S.length&&S[si+1][0]<=i)si++;const text=cueText(m[3]);if(text)out.push({t:+(+m[1]*60+ +m[2]+S[si][1]).toFixed(2),text});i++}
+  return out.sort((a,b)=>a.t-b.t);
+ }catch(e){return[]}finally{clearTimeout(timer)}
+}
+/** letra guardada neste navegador (30 dias; muda se o catálogo trocar a letra ligada) · máx. 40 músicas guardadas */
+function catLyrGet(tr){const sv=store.get('catLyr',{})||{},c=sv[tr.vid],lid=tr.lrc?tr.lrc.id:0;return c&&c.v===SONG_CAP_V&&(c.id|0)===lid&&Date.now()-c.at<30*864e5&&c.lines&&c.lines.length?c.lines:null}
+function catLyrPut(tr,lines){const sv=store.get('catLyr',{})||{};sv[tr.vid]={v:SONG_CAP_V,id:tr.lrc?tr.lrc.id:0,at:Date.now(),lines};
+ const ks=Object.keys(sv).sort((a,b)=>sv[b].at-sv[a].at);for(const k of ks.slice(40))delete sv[k];store.set('catLyr',sv)}
+/** ⏬ com a tela de músicas aberta, baixa em segundo plano as letras que faltam (na ordem da lista, uma a cada 1,5 s): ao
+ *  tocar, a música já começa com a letra. Para ao fechar a tela, ao começar a jogar ou depois de 3 falhas seguidas. */
+let _lrcPre=false;
+async function songCatPrefetch(){
+ if(_lrcPre)return;_lrcPre=true;let fails=0;
+ try{for(const tr of songCatalog()){
+  if(!modalOpen||state==='play'||fails>=3)break;if(!tr.lrc||catLyrGet(tr))continue;
+  const L=await songLrcLines(tr);if(L.length>=3){catLyrPut(tr,L);fails=0}else fails++;
+  await new Promise(z=>setTimeout(z,1500))}}finally{_lrcPre=false}
 }
 function songCatFilter(tag){songCatTag=songCatTag===tag?'':tag;renderModal();snd(660,.05,'triangle',.03)}
 
@@ -273,7 +303,19 @@ const Rhythm={
    const ac=getAC();if(ac.state==='suspended')ac.resume();this.t0=ac.currentTime+.12;drumStart(this.t0);return}
   // YouTube
   if(location.protocol==='file:'){this.fail('song.err.file');return}
-  if(tr.cat)tr.lines=songCatalogLines(tr); // 📚 música pronta: frases já cronometradas, nada a buscar
+  this.lyrFake=false;
+  if(tr.cat){ // 📚 música pronta: 1º a letra sincronizada (LRCLIB com o ajuste do catálogo; senão o servidor de legendas), guardada
+   //  30 dias neste navegador. Sem nenhuma: tempos do catálogo com palavras do jogo, legenda do vídeo ligada e aviso no painel
+   const c=catLyrGet(tr);
+   if(c)tr.lines=c;
+   else{let res={lines:[],err:'net',retryIn:600};
+    showOverlay(`<div class="songload"><span class="spin" aria-hidden="true">🎤</span><b>${t('song.cap.loading')}</b><small>${esc(tr.title||'')}</small></div>`,'glass');
+    if(tr.lrc){const L=await songLrcLines(tr);if(this.track!==tr)return;if(L.length>=3)res={lines:L,err:'',retryIn:0}}
+    if(res.lines.length<3&&songCaptionsApi()){
+     res=await Promise.race([fetchCaptions(tr.vid),new Promise(r=>setTimeout(()=>r({lines:[],err:'net',retryIn:600}),5000))]);if(this.track!==tr)return}
+    if(res.lines.length>=3){tr.lines=res.lines;catLyrPut(tr,res.lines)}
+    else{tr.lines=songCatalogLines(tr);this.lyrFake=true;if(res.err==='cooldown')this.capNote=t('song.cap.cool',{m:Math.ceil(res.retryIn/60)})}}
+  }
   // 🎞️ pede a legenda ao servidor SÓ para a música que vai tocar: sem letra ainda, letra de versão antiga ou letra vencida (7 dias).
   //  Falhou: "pausa" do servidor → tenta quando ela acabar · sem legenda → 12 h · rede → 10 min. Letra vencida que falhar continua valendo.
   const hasL=tr.lines&&tr.lines.length,oldCap=tr.capSrc&&(tr.capV|0)<SONG_CAP_V,stale=hasL&&tr.capSrc&&(!tr.capAt||Date.now()-tr.capAt>SONG_CAP_TTL);
@@ -297,7 +339,7 @@ const Rhythm={
    const dk=document.getElementById('songDock');if(dk)dk.dataset.tip='▶ '+t('song.tapPlay'); // o rótulo do vídeo também chama para o toque (volta ao do anúncio quando a partida abre)
    if(!box.querySelector('.songtap'))box.insertAdjacentHTML('beforeend',`<button class="btn songtap" onclick="Rhythm.tapPlay()">▶ ${t('song.tapPlay')}</button>`)},2500);
   this.yt=new YT.Player('ytPlayer',{width:'100%',height:'100%',videoId:tr.vid,
-   playerVars:{autoplay:0,controls:0,disablekb:1,fs:0,rel:0,playsinline:1,iv_load_policy:3,origin:location.origin},
+   playerVars:Object.assign({autoplay:0,controls:0,disablekb:1,fs:0,rel:0,playsinline:1,iv_load_policy:3,origin:location.origin},this.lyrFake?{cc_load_policy:1,cc_lang_pref:tr.lang||'en'}:{}), // 📚 sem a letra: legenda do vídeo ligada
    events:{
     onReady:ev=>{if(this.track!==tr)return;const d=ev.target.getDuration()||tr.dur||180,hasChart=tr.chart&&tr.chart.length,hasLines=tr.lines&&tr.lines.length;
      this.dur=hasChart||hasLines||!tr.auto?d:Math.min(d,SONG_MAX); // automático: vídeos longos jogam no máximo SONG_MAX s
@@ -521,7 +563,7 @@ addEventListener('resize',songDockPlace);
 // ---------- seletor de músicas (modal 'songs') ----------
 let songFormErr='',songErr='';
 function tabSongs(){
- setTimeout(songFillTitles,0); // 🏷️ faixas salvas só com o id ganham o nome do vídeo (em segundo plano; redesenha quando chegar)
+ setTimeout(songFillTitles,0);setTimeout(songCatPrefetch,800); // ⏬ letras das Músicas prontas em segundo plano // 🏷️ faixas salvas só com o id ganham o nome do vídeo (em segundo plano; redesenha quando chegar)
  const fileWarn=(songErr?`<p class="songwarn">⚠️ ${esc(songErr)}</p>`:'')+(location.protocol==='file:'&&!songErr?`<p class="songwarn">⚠️ ${t('song.err.file')}</p>`:'');songErr='';
  const card=(tr,del)=>{const name=tr.src==='drum'?t(tr.title):esc(tr.title||tr.vid);
   const meta=tr.src==='drum'?`${tr.bpm} BPM · ${Math.round(tr.dur/60*10)/10} min · ${t('song.offline')}`:`${tr.lines&&tr.lines.length?'🎤 '+t('song.lyricsN',{n:tr.lines.length}):tr.chart&&tr.chart.length?t('song.chartN',{n:tr.chart.length}):tr.auto?'✨ '+t('song.auto')+(tr.synced?' · 🥁 '+tr.bpm+' BPM':''):(tr.bpm||100)+' BPM'} · YouTube`;
@@ -940,10 +982,13 @@ function songSideUpdate(force){
  if(!R.hasLyrics){if(SS.last!=='none'){SS.last='none';box.innerHTML=`<p class="ssnone">${t('song.side.noLyrics')}</p>${R.capNote?`<p class="ssnone">🧊 ${esc(R.capNote)}</p>`:''}`}return} // 🧊 servidor em pausa: diz quando tentar de novo
  // karaokê: frase da vez = a mais antiga ainda na tela (ou, se nenhuma, a próxima a nascer)
  const cur=R.currentLyric(),ci=cur?R.notes.indexOf(cur.lyric):R.ni;set('ssLines',Math.min(R.notes.length,Math.max(0,ci)+1)+' / '+R.notes.length);
- if(ci===SS.lastI)return;SS.lastI=ci;
+ // 🎤 karaokê: a frase da vez se preenche de dourado do início ao fim do canto (a transição de 250 ms deixa o avanço contínuo)
+ const kar=()=>{const n=R.notes[ci],k=box.querySelector('.kar');if(!n||!k)return;k.style.setProperty('--k',(Math.max(0,Math.min(1,(T0-n.t)/Math.max(.4,n.end-n.t)))*100).toFixed(1)+'%')};
+ if(ci===SS.lastI){kar();return}SS.lastI=ci;
  const from=Math.max(0,ci-1),to=Math.min(R.notes.length,ci+5);let h='';
- for(let i=from;i<to;i++){const n=R.notes[i];h+=`<p class="ssl${i<ci?' done':i===ci?' cur':''}${n.chorus?' ch':''}">${esc(n.text)}</p>`}
- box.innerHTML=h;
+ if(R.lyrFake)h=`<p class="ssfake">🎮 ${t('song.side.gameWords')}${R.capNote?' · 🧊 '+esc(R.capNote):''}</p>`; // 📚 sem a letra: deixa claro que são palavras do jogo
+ for(let i=from;i<to;i++){const n=R.notes[i];h+=`<p class="ssl${i<ci?' done':i===ci?' cur':''}${n.chorus?' ch':''}">${i===ci?`<span class="kar">${esc(n.text)}</span>`:esc(n.text)}</p>`}
+ box.innerHTML=h;kar();
 }document.addEventListener('scroll',e=>{if(e.target&&e.target.id==='rightPanel')songDockPlace()},true); // o vídeo acompanha a rolagem do painel
 // 🏷️ nomes das faixas sem tocar o vídeo: oEmbed público do YouTube (CORS liberado, sem chave). Usado na importação da
 //  playlist e para consertar faixas salvas só com o id. 4 pedidos por vez; quem já tem nome não é buscado de novo.
