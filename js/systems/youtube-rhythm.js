@@ -21,6 +21,29 @@ const SONG_DRUMS=[
  {id:'drum-march',src:'drum',title:'song.drum.march',bpm:100,dur:100,every:3,kit:'march'},
  {id:'drum-gallop',src:'drum',title:'song.drum.gallop',bpm:126,dur:110,every:3,kit:'gallop'}
 ];
+// 📚 MÚSICAS PRONTAS (js/config/song-catalog.js, gerado por tools/build-song-catalog.mjs): só os TEMPOS de cada frase cantada,
+//  quantas palavras ela tem e onde o refrão se repete. Tocam na hora (nenhum pedido ao servidor de legendas); as palavras
+//  saem do vocabulário do jogo, no idioma e na dificuldade do jogador, sorteadas a cada partida.
+const SONG_CAT_TAGS=['pop','rock','latino','brasil','classic','eletro'];
+const SONG_CAT_TIERS={easy:['e'],normal:['s','m'],full:['m','m','l']};
+let _songCat=null,songCatTag='';
+function songCatalog(){
+ if(!_songCat)_songCat=(typeof SONG_CATALOG!=='undefined'?SONG_CATALOG:[]).map(x=>({id:x.id,src:'yt',vid:x.vid,title:x.title,tag:x.tag,cat:true,g:x.g,bpm:100,chart:[],lines:[]}));
+ return _songCat;
+}
+/** frases do catálogo → linhas {t,end,text}: 1 palavra do jogo a cada 3 cantadas (1 a 4); o refrão repete as palavras da 1ª vez */
+function songCatalogLines(tr){
+ const tiers=SONG_CAT_TIERS[songDiff()]||SONG_CAT_TIERS.normal,out=[];
+ const pick=()=>{const L=POOL[tiers[(Math.random()*tiers.length)|0]];return L&&L.length?L[(Math.random()*L.length)|0]:'magia'};
+ for(const r of tr.g){
+  if(r.length>3&&out[r[3]]){out.push({t:r[0],end:r[0]+r[1],text:out[r[3]].text});continue}
+  const k=Math.max(1,Math.min(4,Math.ceil(r[2]/3))),ws=[];
+  for(let i=0;i<k;i++){let w=pick();for(let j=0;j<6&&ws.includes(w);j++)w=pick();ws.push(w)}
+  out.push({t:r[0],end:r[0]+r[1],text:ws.join(' ')});
+ }
+ return out;
+}
+function songCatFilter(tag){songCatTag=songCatTag===tag?'':tag;renderModal();snd(660,.05,'triangle',.03)}
 
 /** id de 11 caracteres a partir de um link do YouTube (watch, youtu.be, embed, shorts) ou do próprio id */
 function ytIdOf(s){
@@ -232,7 +255,7 @@ const Rhythm={
  /** faixas do jogador (YouTube), salvas no navegador */
  custom(){const a=store.get('songs',[]);return Array.isArray(a)?a:[]},
  saveCustom(list){store.set('songs',list.slice(0,30))},
- all(){return SONG_DRUMS.concat(this.custom())},
+ all(){return SONG_DRUMS.concat(songCatalog(),this.custom())},
  find(id){return this.all().find(x=>x.id===id)||null},
 
  /** escolha no seletor: fecha o modal e começa */
@@ -250,6 +273,7 @@ const Rhythm={
    const ac=getAC();if(ac.state==='suspended')ac.resume();this.t0=ac.currentTime+.12;drumStart(this.t0);return}
   // YouTube
   if(location.protocol==='file:'){this.fail('song.err.file');return}
+  if(tr.cat)tr.lines=songCatalogLines(tr); // 📚 música pronta: frases já cronometradas, nada a buscar
   // 🎞️ pede a legenda ao servidor SÓ para a música que vai tocar: sem letra ainda, letra de versão antiga ou letra vencida (7 dias).
   //  Falhou: "pausa" do servidor → tenta quando ela acabar · sem legenda → 12 h · rede → 10 min. Letra vencida que falhar continua valendo.
   const hasL=tr.lines&&tr.lines.length,oldCap=tr.capSrc&&(tr.capV|0)<SONG_CAP_V,stale=hasL&&tr.capSrc&&(!tr.capAt||Date.now()-tr.capAt>SONG_CAP_TTL);
@@ -505,7 +529,7 @@ function tabSongs(){
   const badge=cs==='ok'?`<em class="capb ok" title="${esc(t('song.cap.okTip'))}">✅ ${t('song.cap.ok')}${tr.capAt?' · '+t('song.cap.days',{n:left}):''}</em>`:cs==='old'?`<em class="capb old">♻️ ${t('song.cap.old')}</em>`:cs==='wait'?`<em class="capb wait">⏳ ${t('song.cap.wait')}</em>`:cs==='auto'?`<em class="capb auto">🎞️ ${t('song.cap.auto')}</em>`:'';
   return`<div class="songcard ${tr.src}${cs==='ok'?' playable':''}"><span class="songic" aria-hidden="true">${tr.src==='drum'?'🥁':'📺'}</span><div class="songtx"><b>${name}</b><small>${meta}</small>${badge}</div>
    ${del?`<button class="songdel" onclick="songDelete('${tr.id}')" aria-label="${esc(t('song.delete'))}">✕</button><button class="songmap" onclick="songEdit('${tr.id}','sync')" title="${esc(t('song.sync.btn'))}">🥁${tr.synced?' ✓':''}</button><button class="songmap" onclick="songEdit('${tr.id}')">✏️ ${t('song.ed.map')}</button>`:''}<button class="btn songplay" onclick="Rhythm.pick('${tr.id}')">▶ ${t('song.play')}</button></div>`};
- const hist=(Array.isArray(profile.songHistory)?profile.songHistory:[]).slice(0,5);
+ const hist0=Array.isArray(profile.songHistory)?profile.songHistory:[],hist=hist0.slice(0,5);
  // 🎯 tela limpa: [ cole o link ] [ JOGAR ] no topo; faixas prontas e as suas logo abaixo; BPM/tempos só no "Avançado"
  //  com o servidor de legendas configurado, a caixa de legenda manual vai para o Avançado (as frases vêm sozinhas)
  const capOn=!!songCaptionsApi(),lrcBox=`<details class="songlrc"><summary>🎤 ${t('song.quick.lrc')}</summary><textarea id="sgQuickLrc" rows="4" placeholder="0:18&#10;…&#10;0:22&#10;…" spellcheck="false"></textarea>
@@ -515,6 +539,7 @@ function tabSongs(){
  ${capOn?'':lrcBox}
  <p class="songhint">${t(capOn?'song.cap.hint':'song.quick.hint')}</p>${quickErr?`<p class="songwarn">⚠️ ${esc(quickErr)}</p>`:''}${fileWarn}
  <div class="songdiff" role="radiogroup" aria-label="${esc(t('song.diff.title'))}"><span>🎚️ ${t('song.diff.title')}</span>${['easy','normal','full'].map(d=>`<button class="${songDiff()===d?'on':''}" role="radio" aria-checked="${songDiff()===d}" onclick="songSetDiff('${d}')" title="${esc(t('song.diff.'+d+'Tip'))}">${t('song.diff.'+d)}</button>`).join('')}<small>${t('song.diff.'+songDiff()+'Tip')}</small></div>
+ ${songCatHTML(hist0)}
  <h4 class="songh">🥁 ${t('song.ready')}</h4><div class="songlist">${SONG_DRUMS.map(x=>card(x,false)).join('')}</div>
  ${Rhythm.custom().length?`<h4 class="songh">📺 ${t('song.yours')}</h4><p class="songhint">${t('song.cap.note')}${capCoolUntil()>Date.now()?' · 🧊 '+t('song.cap.cool',{m:Math.ceil((capCoolUntil()-Date.now())/6e4)}):''}</p><div class="songlist">${Rhythm.custom().slice().sort((a,b)=>(songCapState(a)==='ok'?0:1)-(songCapState(b)==='ok'?0:1)).map(x=>card(x,true)).join('')}</div>`:''}
  <details class="songform"${songFormErr?' open':''}><summary>⚙️ ${t('song.adv')}</summary>
@@ -531,6 +556,17 @@ function tabSongs(){
   ${songFormErr?`<p class="songwarn">${esc(songFormErr)}</p>`:''}<button class="btn" onclick="songSave()">💾 ${t('song.save')}</button>
  </details>
  ${hist.length?`<h4 class="songh">📜 ${t('song.history')}</h4><table class="fast songhist"><tr><th>${t('song.track')}</th><th>%</th><th>✨</th><th>WPM</th></tr>${hist.map(h=>`<tr><td>${h.clear?'🏆 ':''}${esc(h.title)}</td><td>${h.pct}</td><td>${h.perfect}</td><td>${h.wpm}</td></tr>`).join('')}</table>`:''}`;
+}
+/** 📚 bloco das Músicas prontas: filtros por estilo e cartões com o melhor resultado do jogador (🏆 completou · % alcançado) */
+function songCatHTML(hist){
+ const cat=songCatalog();if(!cat.length)return'';
+ const best={};for(const h of hist){const b=best[h.id]||(best[h.id]={pct:0,clear:false});b.pct=Math.max(b.pct,h.pct|0);if(h.clear)b.clear=true}
+ const tags=SONG_CAT_TAGS.filter(g=>cat.some(x=>x.tag===g)),list=songCatTag?cat.filter(x=>x.tag===songCatTag):cat;
+ const card=tr=>{const b=best[tr.id],res=b?(b.clear?'<em class="catres win">🏆</em>':`<em class="catres">${b.pct}%</em>`):'';
+  return`<div class="songcard yt cat"><span class="songic" aria-hidden="true">⚡</span><div class="songtx"><b>${esc(tr.title)}</b><small>🎤 ${t('song.lyricsN',{n:tr.g.length})} · ${t('song.tag.'+tr.tag)}</small></div>${res}<button class="btn songplay" onclick="Rhythm.pick('${tr.id}')">▶ ${t('song.play')}</button></div>`};
+ return`<h4 class="songh">📚 ${t('song.cat.title')} <small>${cat.length}</small></h4><p class="songhint">${t('song.cat.hint')}</p>
+ <div class="songtags"><button class="${songCatTag?'':'on'}" onclick="songCatFilter('')">${t('song.cat.all')}</button>${tags.map(g=>`<button class="${songCatTag===g?'on':''}" onclick="songCatFilter('${g}')">${t('song.tag.'+g)}</button>`).join('')}</div>
+ <div class="songlist songcat">${list.map(card).join('')}</div>`;
 }
 function songSave(){
  const $v=id=>(document.getElementById(id)||{}).value||'';const vid=ytIdOf($v('sgUrl'));
@@ -570,6 +606,7 @@ function songQuick(){
  if(!vid){quickErr=t('song.err.url');renderModal();const n=document.getElementById('sgQuick');if(n)n.focus();return}
  quickErr='';let tr=Rhythm.custom().find(x=>x.vid===vid);
  const lt=document.getElementById('sgQuickLrc'),lines=parseTimedText(lt?lt.value:''); // 🎤 transcrição/legenda/LRC colada junto com o link → modo frase
+ const ct=songCatalog().find(x=>x.vid===vid);if(ct&&!lines.length)return Rhythm.pick(ct.id); // 📚 link de uma música pronta: toca na hora
  if(!tr){tr={id:'yt-'+vid,src:'yt',vid,title:vid,auto:true,bpm:SONG_AUTO_BPM,chart:[],lines};Rhythm.saveCustom([tr].concat(Rhythm.custom()))}
  else if(lines.length)Rhythm.saveCustom(Rhythm.custom().map(x=>x.id===tr.id?Object.assign({},x,{lines}):x));
  if(lt&&lt.value.trim()&&!lines.length){quickErr=t('song.err.lrc');renderModal();return}
